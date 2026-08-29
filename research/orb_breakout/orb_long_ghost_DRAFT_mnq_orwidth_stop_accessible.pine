@@ -48,7 +48,7 @@ lineWidthFx  = highContrastMode ? lineWidthInput + 1 : lineWidthInput
 // ---------------------------------------------------------------------------
 // 3. STRATEGY CALCULATIONS (original, unchanged)
 // ---------------------------------------------------------------------------
-if syminfo.ticker != "MNQ1!" and syminfo.root != "MNQ"
+if barstate.islast and syminfo.ticker != "MNQ1!" and syminfo.root != "MNQ"
     label.new(bar_index, high, "WARNING: this draft is for MNQ only.\nCurrent chart: " + syminfo.ticker, style=label.style_label_down, color=warningColor, textcolor=color.black, size=labelSize)
 
 var float rangeHigh     = na
