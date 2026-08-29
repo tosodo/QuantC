@@ -1,0 +1,201 @@
+//@version=5
+indicator("QuantC ORB Long MNQ - OR-width stop DRAFT, NOT LIVE (Accessible)", overlay=true, max_lines_count=50, max_labels_count=500)
+
+// ============================================================================
+// ACCESSIBLE VERSION of orb_long_ghost_DRAFT_mnq_orwidth_stop.pine.
+//
+// TRADING LOGIC IS UNCHANGED - every line under "STRATEGY CALCULATIONS" and
+// "ENTRY / EXIT" below, and the two alert() calls, are copied verbatim from
+// the original draft. The stop is still exactly rangeLow (the day's own
+// opening-range low) - nothing new is invented. Everything below
+// "ACCESSIBILITY SETTINGS" and "VISUALS" only reads values the original
+// script already computes and draws them more clearly.
+//
+// See orb_long_ghost_DRAFT_mnq_orwidth_stop.pine for the full research
+// rationale (survivability numbers, open questions) - not repeated here.
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// 1. INPUTS (original, unchanged)
+// ---------------------------------------------------------------------------
+qty      = input.int(1, "Contracts per signal", minval=1, maxval=1, group="Strategy", tooltip="Fixed at 1 MNQ micro contract, matching the tested position size.")
+testMode = input.bool(true, "Test mode (Ghost dry-run, no real orders)", group="Strategy", tooltip="Adds \"test\":true to every alert. Ghost validates the alert fully but places nothing at the broker. Turn this OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
+
+// ---------------------------------------------------------------------------
+// 2. ACCESSIBILITY SETTINGS (new - presentation only, no effect on alerts)
+// ---------------------------------------------------------------------------
+enableAccessibleMode = input.bool(true, "Enable accessible mode", group="Accessibility Settings", tooltip="Master switch for everything below. Turn off to fall back to the plain original chart.")
+showDashboard         = input.bool(true, "Show status dashboard", group="Accessibility Settings")
+dashPosition          = input.string("Top Right", "Dashboard position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Accessibility Settings")
+showBuyEntryLabels    = input.bool(true, "Show BUY / ENTRY labels", group="Accessibility Settings")
+showStopLabels        = input.bool(true, "Show STOP labels", group="Accessibility Settings")
+showExitLabels        = input.bool(true, "Show EXIT labels", group="Accessibility Settings")
+showHistoricalSignals = input.bool(true, "Show historical signals", group="Accessibility Settings", tooltip="If off, only the most recent trade's labels are kept on the chart.")
+maxHistoricalSignals  = input.int(20, "Max historical signals to keep", minval=1, maxval=200, group="Accessibility Settings")
+signalLabelSize       = input.string("Large", "Signal label size", options=["Normal", "Large"], group="Accessibility Settings")
+lineWidthInput        = input.int(3, "Line width (structure / stop)", minval=1, maxval=6, group="Accessibility Settings")
+highContrastMode      = input.bool(true, "High contrast mode", group="Accessibility Settings", tooltip="Increases line width and uses fully opaque colours when on.")
+
+entryColor     = input.color(color.white,   "Entry / BUY colour",  group="Accessibility Colours")
+stopColor      = input.color(#FF6B6B,       "Stop colour",         group="Accessibility Colours")
+exitColor      = input.color(#B8C0CC,       "Exit colour",         group="Accessibility Colours")
+warningColor   = input.color(#FFD166,       "Warning colour",      group="Accessibility Colours")
+structureColor = input.color(#A78BFA,       "Structure (OR) colour", group="Accessibility Colours")
+
+labelSize    = signalLabelSize == "Large" ? size.large : size.normal
+lineWidthFx  = highContrastMode ? lineWidthInput + 1 : lineWidthInput
+
+// ---------------------------------------------------------------------------
+// 3. STRATEGY CALCULATIONS (original, unchanged)
+// ---------------------------------------------------------------------------
+if syminfo.ticker != "MNQ1!" and syminfo.root != "MNQ"
+    label.new(bar_index, high, "WARNING: this draft is for MNQ only.\nCurrent chart: " + syminfo.ticker, style=label.style_label_down, color=warningColor, textcolor=color.black, size=labelSize)
+
+var float rangeHigh     = na
+var float rangeLow      = na
+var int   rangeBarCount = 0
+var bool  tradedToday   = false
+var bool  inPosition    = false
+var float entryPrice    = na
+
+rangeWin       = not na(time(timeframe.period, "0930-0945", "America/New_York"))
+inSession      = not na(time(timeframe.period, "0945-1600", "America/New_York"))
+sessionLastBar = not na(time(timeframe.period, "1559-1600", "America/New_York"))
+rangeWinStart  = rangeWin and not rangeWin[1]
+
+if rangeWinStart
+    rangeHigh     := high
+    rangeLow      := low
+    rangeBarCount := 1
+    tradedToday   := false
+else if rangeWin
+    rangeHigh     := math.max(rangeHigh, high)
+    rangeLow      := math.min(rangeLow, low)
+    rangeBarCount += 1
+
+rangeComplete = rangeBarCount >= 15
+longSignal    = inSession and not tradedToday and rangeComplete and close > rangeHigh
+exitSignal    = sessionLastBar and inPosition
+
+tsIso() =>
+    str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+// ---------------------------------------------------------------------------
+// 4. ENTRY / EXIT + ALERTS (original, unchanged - this is what Ghost receives)
+// ---------------------------------------------------------------------------
+if longSignal
+    tradedToday := true
+    inPosition  := true
+    entryPrice  := close
+    stopPrice = rangeLow
+    msg = '{"action":"buy","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
+          ',"sl":' + str.tostring(stopPrice) +
+          ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+if exitSignal
+    inPosition := false
+    msg = '{"action":"exit","time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+// ---------------------------------------------------------------------------
+// 5. VISUAL HELPERS (new)
+// ---------------------------------------------------------------------------
+var label[] signalLabels = array.new_label()
+
+trackLabel(lbl) =>
+    array.push(signalLabels, lbl)
+    keep = showHistoricalSignals ? maxHistoricalSignals * 3 : 3
+    if array.size(signalLabels) > keep
+        label.delete(array.shift(signalLabels))
+
+sessionStateText() =>
+    string txt = na
+    if rangeWin
+        txt := "RANGE BUILDING"
+    else if inPosition
+        txt := "IN TRADE"
+    else if inSession
+        txt := "IN SESSION"
+    else
+        txt := "SESSION CLOSED"
+    txt
+
+signalStateText() =>
+    string txt = na
+    if inPosition
+        txt := "LONG (OPEN)"
+    else if tradedToday
+        txt := "DONE FOR DAY"
+    else if rangeComplete and inSession
+        txt := "NO TRADE - WAITING FOR BREAKOUT"
+    else if rangeWin
+        txt := "NO TRADE - BUILDING RANGE"
+    else
+        txt := "NO TRADE - OUTSIDE SESSION"
+    txt
+
+// ---------------------------------------------------------------------------
+// 6. STRUCTURE / STOP VISUALISATION (shape-differentiated, not just colour)
+// ---------------------------------------------------------------------------
+orShown = rangeComplete and inSession
+plot(orShown ? rangeHigh : na, title="Opening range high", color=enableAccessibleMode ? structureColor : color.new(color.green, 0), style=plot.style_stepline, linewidth=enableAccessibleMode ? lineWidthFx : 1)
+plot(orShown ? rangeLow : na, title="Opening range low / stop level", color=enableAccessibleMode ? stopColor : color.new(color.orange, 0), style=enableAccessibleMode ? plot.style_stepline_diamond : plot.style_stepline, linewidth=enableAccessibleMode ? lineWidthFx : 1)
+
+// ---------------------------------------------------------------------------
+// 7. SIGNAL / ENTRY / STOP / EXIT LABELS (new - bounded, event-anchored)
+// ---------------------------------------------------------------------------
+if enableAccessibleMode and longSignal and showBuyEntryLabels
+    buyLbl = label.new(bar_index, low, "▲ BUY\nENTRY " + str.tostring(close, format.mintick), style=label.style_label_up, color=entryColor, textcolor=color.black, size=labelSize)
+    trackLabel(buyLbl)
+
+if enableAccessibleMode and longSignal and showStopLabels
+    stopLbl = label.new(bar_index, rangeLow, "✕ STOP\n" + str.tostring(rangeLow, format.mintick), style=label.style_label_down, color=stopColor, textcolor=color.white, size=labelSize)
+    trackLabel(stopLbl)
+
+if enableAccessibleMode and exitSignal and showExitLabels
+    exitLbl = label.new(bar_index, high, "EXIT\nSESSION CLOSE", style=label.style_label_down, color=exitColor, textcolor=color.black, size=labelSize)
+    trackLabel(exitLbl)
+
+// Non-accessible fallback markers (kept so turning accessible mode off doesn't lose signal visibility entirely)
+plotshape(not enableAccessibleMode and longSignal, title="Long signal (plain)", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(not enableAccessibleMode and exitSignal, title="Exit signal (plain)", style=shape.xcross, location=location.abovebar, color=color.gray, size=size.tiny)
+
+// ---------------------------------------------------------------------------
+// 8. WRONG-TIMEFRAME WARNING (original condition, restyled)
+// ---------------------------------------------------------------------------
+if barstate.islast and timeframe.period != "1"
+    label.new(bar_index, high, "⚠ WARNING\nWRONG TIMEFRAME - validated on the 1-minute chart only.\nCurrently running on: " + timeframe.period, style=label.style_label_down, color=warningColor, textcolor=color.black, size=labelSize)
+
+// ---------------------------------------------------------------------------
+// 9. DASHBOARD (new - always reflects current state, not historical)
+// ---------------------------------------------------------------------------
+posMap(p) =>
+    p == "Top Right" ? position.top_right : p == "Top Left" ? position.top_left : p == "Bottom Right" ? position.bottom_right : position.bottom_left
+
+var table dash = table.new(posMap(dashPosition), 2, 8, border_width=1)
+
+addRow(rowIdx, lbl, val, valColor) =>
+    table.cell(dash, 0, rowIdx, lbl, text_color=color.white, text_size=size.normal, bgcolor=#1B2230)
+    table.cell(dash, 1, rowIdx, val, text_color=valColor, text_size=size.normal, bgcolor=#1B2230)
+
+if enableAccessibleMode and showDashboard and barstate.islast
+    wrongSymbol    = syminfo.ticker != "MNQ1!" and syminfo.root != "MNQ"
+    wrongTimeframe = timeframe.period != "1"
+    row = 0
+    addRow(row, "SESSION", sessionStateText(), color.white)
+    row += 1
+    addRow(row, "SIGNAL", signalStateText(), inPosition ? entryColor : color.white)
+    row += 1
+    addRow(row, "OR HIGH", rangeComplete ? str.tostring(rangeHigh, format.mintick) : "—", color.white)
+    row += 1
+    addRow(row, "OR LOW", rangeComplete ? str.tostring(rangeLow, format.mintick) : "—", color.white)
+    row += 1
+    addRow(row, "ENTRY", inPosition ? str.tostring(entryPrice, format.mintick) : "—", entryColor)
+    row += 1
+    addRow(row, "STOP", inPosition ? str.tostring(rangeLow, format.mintick) : "—", stopColor)
+    row += 1
+    addRow(row, "TAKE PROFIT", "N/A - session-close exit only", color.gray)
+    row += 1
+    if wrongSymbol or wrongTimeframe
+        addRow(row, "WARNING", wrongSymbol ? "WRONG SYMBOL" : "WRONG TIMEFRAME", warningColor)

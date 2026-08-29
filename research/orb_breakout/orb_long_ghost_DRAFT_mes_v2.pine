@@ -1,0 +1,143 @@
+//@version=5
+indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE", overlay=true, max_lines_count=50)
+
+// ============================================================================
+// DRAFT ONLY - this file is not wired to any TradingView alert or Ghost
+// ticker. It is a proposal for review, saved separately from the currently
+// LIVE orb_long_ghost.pine so nothing is overwritten. Do not create a
+// TradingView alert from this script, and do not point a Ghost webhook at
+// it, until you've reviewed it and given explicit go-ahead to deploy.
+//
+// What changed vs the live script, and why (each change traces to a
+// measured research result - see mes_final_run.py / dynamic_sizing_matrix.py
+// in this folder):
+//
+//   1. Entry window LOCKED at the full 09:45-16:00 ET session - this is
+//      config 4 from mes_final_run.py, measured at 77.8% pass. A narrower
+//      09:45-11:00 window was also tested (config 5) and REJECTED: it only
+//      drops 1.7% of historical trades but cost ~6 points of survival odds
+//      (72.0% vs 77.8%), a larger effect than the trade count alone would
+//      suggest. Full session is the stronger, measured choice.
+//   2. A broker-side stop-loss is sent with the entry alert (`sl` field),
+//      124.75 ES points below entry - the 99th-percentile Maximum-Adverse-
+//      Excursion distance measured in wide_stop_test.py. VERIFIED against
+//      QuantCrawler's own Ghost Webhook JSON Reference
+//      (https://quantcrawler.com/guides/ghost-webhook-json, checked
+//      2026-08-21): `sl` is documented as an "Absolute stop price" (a
+//      price level, not a point/tick offset) - confirming the value this
+//      script sends (close - stopPoints, a price) is the correct shape.
+//      That page also states the stop needs BOTH "Use Stop Loss and Take
+//      Profit" AND "Use Webhook SL/TP" turned on for the ticker - TWO
+//      toggles, not the one SETUP_GUIDE.md currently mentions - and that
+//      "a stop on the wrong side of entry is discarded" (not a concern
+//      here - this stop is always below a long entry).
+//   3. A 90-minute "underwater" time exit: 90 minutes after entry, if the
+//      position is not net profitable (after an estimated cost), send a
+//      market exit alert immediately rather than holding to the close.
+//      Checked once per trade, not on every bar after minute 90 - matches
+//      the tested convention exactly (mes_final_run.py resolve_exit()).
+//      The exit alert's "reason" field is custom (not one of Ghost's
+//      documented exit_type values, which are tp/sl/trail/be - none fit a
+//      time-based exit) - safe to send anyway, since Ghost's docs say
+//      unknown fields are ignored, not rejected.
+//   4. A soft on-chart warning if this is not running on an MES chart
+//      (MNQ was tested and closed - 30-35% pass rate, discarded per your
+//      instruction). This does not block anything; TradingView alerts
+//      cannot be restricted to one ticker from inside the script - you
+//      still need to create the TradingView alert on the MES1! chart only
+//      and not duplicate it onto MNQ1!, same as any other Pine alert.
+//
+//   5. Execution slippage was measured (mes_final_run.py configs 6-7,
+//      2026-08-21): applying 1-2 adverse ticks to EVERY exit fill - the
+//      stop, the 90-min time exit, AND the scheduled session close (most
+//      trades, ~57% of them, exit at the close, so this matters more than
+//      testing the stop/time fills alone would suggest):
+//        no slippage (this script's baseline) ......... 77.82% pass
+//        1 tick  (0.25 pt) adverse, all exits .......... 71.60% pass
+//        2 ticks (0.50 pt) adverse, all exits .......... 64.29% pass
+//      Take the 77.8% headline as optimistic - realistic live fills land
+//      somewhere between the 1-tick and 2-tick rows above, not at the top.
+//
+// STILL OPEN, not yet resolved before this should go live:
+//   - In Ghost's dashboard, the MES ticker needs BOTH "Use Stop Loss and
+//     Take Profit" AND "Use Webhook SL/TP" turned ON for the `sl` field to
+//     do anything - SETUP_GUIDE.md's current instructions say to leave the
+//     first one OFF (that guide describes the OLD, no-stop mechanism).
+//     Both toggles are manual changes in Ghost's UI, not something this
+//     script can do - yours to flip deliberately, same as Test mode.
+// ============================================================================
+
+qty         = input.int(1, "Contracts per signal", minval=1, maxval=1, tooltip="Fixed at 1 MES micro contract - dynamic ATR-based sizing was tested and rejected (see the closed hypothesis note).")
+testMode    = input.bool(true, "Test mode (Ghost dry-run, no real orders)", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
+stopPoints  = input.float(124.75, "Stop-loss distance (ES points, 99th pctile MAE)", minval=0)
+timeExitMin = input.int(90, "Underwater time-exit, minutes after entry", minval=1)
+
+if syminfo.ticker != "MES1!" and syminfo.root != "MES"
+    label.new(bar_index, high, "WARNING: this draft is validated for MES only.\nCurrent chart: " + syminfo.ticker + "\nMNQ was tested and rejected - do not run this on MNQ.", style=label.style_label_down, color=color.red, textcolor=color.white)
+
+var float rangeHigh       = na
+var float rangeLow        = na
+var int   rangeBarCount   = 0
+var bool  tradedToday     = false
+var bool  inPosition      = false
+var float entryPrice      = na
+var int   entryTime       = na
+var bool  timeExitChecked = false
+
+rangeWin        = not na(time(timeframe.period, "0930-0945", "America/New_York"))
+fullSession     = not na(time(timeframe.period, "0945-1600", "America/New_York"))
+sessionLastBar  = not na(time(timeframe.period, "1559-1600", "America/New_York"))
+rangeWinStart   = rangeWin and not rangeWin[1]
+
+if rangeWinStart
+    rangeHigh       := high
+    rangeLow        := low
+    rangeBarCount   := 1
+    tradedToday     := false
+    timeExitChecked := false
+else if rangeWin
+    rangeHigh       := math.max(rangeHigh, high)
+    rangeLow        := math.min(rangeLow, low)
+    rangeBarCount   += 1
+
+rangeComplete = rangeBarCount >= 15
+longSignal    = fullSession and not tradedToday and rangeComplete and close > rangeHigh
+
+minutesSinceEntry = inPosition ? (time - entryTime) / 60000 : na
+timeExitDue        = inPosition and not timeExitChecked and fullSession and minutesSinceEntry >= timeExitMin
+timeExitTriggered   = timeExitDue and close <= entryPrice   // "underwater or breakeven" per the spec
+closeExitSignal     = sessionLastBar and inPosition
+exitSignal           = timeExitTriggered or closeExitSignal
+
+tsIso() =>
+    str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+if longSignal
+    tradedToday     := true
+    inPosition      := true
+    entryPrice      := close
+    entryTime       := time
+    timeExitChecked := false
+    stopPrice = close - stopPoints
+    msg = '{"action":"buy","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
+          ',"sl":' + str.tostring(stopPrice) +
+          ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+if timeExitDue
+    timeExitChecked := true
+
+if exitSignal
+    inPosition := false
+    reason = timeExitTriggered ? "time_exit_90min" : "session_close"
+    msg = '{"action":"exit","reason":"' + reason + '","time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+plot(rangeComplete and fullSession ? rangeHigh : na, title="Opening range high", color=color.new(color.green, 0), style=plot.style_stepline, linewidth=1)
+plot(rangeComplete and fullSession ? rangeLow  : na, title="Opening range low",  color=color.new(color.red, 0),   style=plot.style_stepline, linewidth=1)
+plot(inPosition ? entryPrice - stopPoints : na, title="Stop-loss level", color=color.new(color.orange, 0), style=plot.style_circles, linewidth=1)
+plotshape(longSignal, title="Long signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(exitSignal, title="Exit signal", style=shape.xcross, location=location.abovebar, color=color.gray, size=size.tiny)
+
+if barstate.islast and timeframe.period != "1"
+    label.new(bar_index, high, "WRONG TIMEFRAME - this script is only validated on the 1-minute chart.\nCurrently running on: " + timeframe.period, style=label.style_label_down, color=color.red, textcolor=color.white)

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Downloaded/cached market data (regenerate via each folder's fetch_data*.py)
+data/
+
+# OS junk
+.DS_Store
+
+# Secrets - never commit these
+.env
+.env.*
+*.key
+*_credentials*

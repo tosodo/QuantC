@@ -1,0 +1,80 @@
+//@version=5
+indicator("QuantC ORB Long (validated) - Ghost alerts", overlay=true, max_lines_count=50)
+
+// ============================================================================
+// Implements EXACTLY the mechanism validated in QuantC/research/orb_breakout
+// (see HYPOTHESIS.md and RESULTS.md in that folder) - no new rule, indicator,
+// or parameter is introduced in this script beyond what was already tested.
+//
+//   - Opening range = high/low of the 09:30:00-09:44:59 ET bars (15 x 1-min).
+//   - Long entry = the FIRST 1-minute bar (from 09:45 ET on) whose CLOSE is
+//     above the range high. One entry per instrument per day.
+//   - Short side is deliberately NOT implemented - it was tested and
+//     rejected (signs disagreed across instruments out-of-sample).
+//   - Exit = the session's last bar before 16:00 ET (hold to the close - the
+//     tested mechanism has no stop-loss, so none is sent here).
+//
+// MUST run on the 1-minute chart. Any other timeframe computes a different,
+// untested rule (both the opening range and the signal detection depend on
+// seeing every individual 1-minute bar) - the script warns on-chart if the
+// timeframe is wrong.
+//
+// Sends QuantCrawler Ghost's webhook JSON directly via Pine's alert()
+// function with the JSON built from real values, not TradingView's
+// {{placeholder}} template syntax - Ghost's own docs are explicit that
+// alert() calls should carry hardcoded/computed values, and their JSON
+// reference page confirms {"action":"buy","price":...} / {"action":"exit"}
+// as the expected shapes. See SETUP_GUIDE.md in this folder for how to wire
+// the TradingView alert to your Ghost webhook URL.
+// ============================================================================
+
+qty      = input.int(1, "Contracts per signal", minval=1, tooltip="Position-sizing research recommends 1 MICRO contract (MNQ or MES) on a $100k account - see RESULTS.md section 2.6. Full-size NQ/ES was measured too large for this account's drawdown limit (44-45% pass rate vs 89-99% for micros).")
+testMode = input.bool(true, "Test mode (Ghost dry-run, no real orders)", tooltip="Adds \"test\":true to every alert. Ghost validates the alert fully but places nothing at the broker. Turn this OFF only when you are ready for signals to place real orders (paper or live, depending on how the ticker is connected in Ghost) - that switch is yours to make deliberately.")
+
+var float rangeHigh      = na
+var float rangeLow       = na
+var int   rangeBarCount  = 0
+var bool  tradedToday    = false
+var bool  inPosition     = false
+
+rangeWin       = not na(time(timeframe.period, "0930-0945", "America/New_York"))
+inSession      = not na(time(timeframe.period, "0945-1600", "America/New_York"))
+sessionLastBar = not na(time(timeframe.period, "1559-1600", "America/New_York"))
+rangeWinStart  = rangeWin and not rangeWin[1]
+
+if rangeWinStart
+    rangeHigh     := high
+    rangeLow      := low
+    rangeBarCount := 1
+    tradedToday   := false
+else if rangeWin
+    rangeHigh     := math.max(rangeHigh, high)
+    rangeLow      := math.min(rangeLow, low)
+    rangeBarCount += 1
+
+rangeComplete = rangeBarCount >= 15
+longSignal    = inSession and not tradedToday and rangeComplete and close > rangeHigh
+exitSignal    = sessionLastBar and inPosition
+
+tsIso() =>
+    str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+if longSignal
+    tradedToday := true
+    inPosition  := true
+    msg = '{"action":"buy","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
+          ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+if exitSignal
+    inPosition := false
+    msg = '{"action":"exit","time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+plot(rangeComplete and inSession ? rangeHigh : na, title="Opening range high", color=color.new(color.green, 0), style=plot.style_stepline, linewidth=1)
+plot(rangeComplete and inSession ? rangeLow  : na, title="Opening range low",  color=color.new(color.red, 0),   style=plot.style_stepline, linewidth=1)
+plotshape(longSignal, title="Long signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(exitSignal, title="Exit signal", style=shape.xcross, location=location.abovebar, color=color.gray, size=size.tiny)
+
+if barstate.islast and timeframe.period != "1"
+    label.new(bar_index, high, "WRONG TIMEFRAME - this script is only validated on the 1-minute chart.\nCurrently running on: " + timeframe.period, style=label.style_label_down, color=color.red, textcolor=color.white)

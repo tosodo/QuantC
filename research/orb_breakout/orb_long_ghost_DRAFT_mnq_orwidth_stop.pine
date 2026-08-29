@@ -1,0 +1,123 @@
+//@version=5
+indicator("QuantC ORB Long MNQ - OR-width stop DRAFT, NOT LIVE", overlay=true, max_lines_count=50)
+
+// ============================================================================
+// DRAFT ONLY - this file is not wired to any TradingView alert or Ghost
+// ticker. It is a proposal for review, saved separately from the currently
+// LIVE orb_long_ghost.pine so nothing about the live script is touched.
+// Do not create a TradingView alert from this script, and do not point a
+// Ghost webhook at it, until you've reviewed it and given explicit
+// go-ahead - same discipline as orb_long_ghost_DRAFT_mes_v2.pine.
+//
+// What changed vs the live script, and why (traces to a measured result):
+//
+//   1. A stop-loss is sent with the entry alert (`sl` field) - the OPPOSITE
+//      SIDE OF THE SAME OPENING RANGE already used to generate the entry
+//      signal (rangeLow, for a long). This is the exact rule pre-registered
+//      and tested in STOPLOSS_HYPOTHESIS.md / stoploss_test.py (2026-08-20)
+//      and re-measured with the corrected exact-dollar sizing method in
+//      stoploss_reconciliation.py (2026-08-27). No new parameter is
+//      introduced - the stop distance is whatever that day's own opening
+//      range width happens to be, not a fixed point value.
+//   2. `sl` sent as an absolute price (rangeLow), matching the same field
+//      and shape already verified against Ghost's own Webhook JSON
+//      Reference and already in use in orb_long_ghost_DRAFT_mes_v2.pine.
+//   3. No time-based exit, no take-profit - this tests the stop ALONE,
+//      matching exactly what stoploss_test.py / stoploss_reconciliation.py
+//      measured. (The MES draft's 90-minute time exit is a DIFFERENT,
+//      MES-only mechanism that has never been tested on MNQ/NQ - not
+//      combined with this one.)
+//   4. A soft on-chart warning if this is not running on an MNQ chart.
+//
+// WHAT THE RESEARCH ACTUALLY SHOWS (be honest about this before watching it
+// run) - see stoploss_reconciliation.py and stoploss_significance_check.py:
+//   - Survivability (probability of passing the Lucid challenge before
+//     hitting the drawdown limit, from a full-history Monte Carlo stress
+//     test, exact-dollar method): MNQ no-stop 31.30% -> with this stop
+//     54.30% (+23.0 pts). This is the main reason to consider it at all.
+//   - Mean dollar profit per trade with the stop, held-back out-of-sample
+//     slice: -$3.36/trade vs the no-stop baseline - NOT statistically
+//     significant (p=0.89, n=196), but not a positive result either. Do
+//     not read this stop as "makes more money per trade" - the case for it
+//     is entirely about cutting catastrophic days, not raising the average.
+//   - Fill is assumed exact at the stop price in all testing so far - real
+//     slippage through a fast-moving stop is unmodeled and would only work
+//     against this stop, not for it.
+//
+// STILL OPEN, not yet resolved before this should go live OR before a
+// meaningful dry run can prove out real stop EXECUTION (as opposed to just
+// payload plumbing):
+//   - In test mode ("test":true), Ghost validates the alert and delivers it
+//     but places NOTHING at the broker - so a test-mode dry run of this
+//     script can confirm the script computes a sane rangeLow-based stop
+//     price and produces well-formed JSON that Ghost accepts, but it CANNOT
+//     prove Ghost/Tradovate actually honors that `sl` price correctly,
+//     because no real or simulated order is placed to honor it.
+//   - Ghost's dashboard has a single MNQ ticker configuration shared by
+//     EVERY alert that mentions MNQ - including the live, real-money
+//     production script. To make the `sl` field do anything even in a
+//     fuller test, that ticker needs BOTH "Use Stop Loss and Take Profit"
+//     AND "Use Webhook SL/TP" turned on (same finding as the MES draft).
+//     Those are ticker-wide toggles, not per-script - flipping them could
+//     change how the LIVE script's real trades are protected too, since
+//     the live script sends no `sl` field of its own and currently relies
+//     on a separately-configured fixed 10pt/20pt bracket in Ghost. This is
+//     a deliberate, not-yet-taken step - left for you to decide, not done
+//     automatically here.
+// ============================================================================
+
+qty      = input.int(1, "Contracts per signal", minval=1, maxval=1, tooltip="Fixed at 1 MNQ micro contract, matching the tested position size.")
+testMode = input.bool(true, "Test mode (Ghost dry-run, no real orders)", tooltip="Adds \"test\":true to every alert. Ghost validates the alert fully but places nothing at the broker. Turn this OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
+
+if syminfo.ticker != "MNQ1!" and syminfo.root != "MNQ"
+    label.new(bar_index, high, "WARNING: this draft is for MNQ only.\nCurrent chart: " + syminfo.ticker, style=label.style_label_down, color=color.red, textcolor=color.white)
+
+var float rangeHigh     = na
+var float rangeLow      = na
+var int   rangeBarCount = 0
+var bool  tradedToday   = false
+var bool  inPosition    = false
+
+rangeWin       = not na(time(timeframe.period, "0930-0945", "America/New_York"))
+inSession      = not na(time(timeframe.period, "0945-1600", "America/New_York"))
+sessionLastBar = not na(time(timeframe.period, "1559-1600", "America/New_York"))
+rangeWinStart  = rangeWin and not rangeWin[1]
+
+if rangeWinStart
+    rangeHigh     := high
+    rangeLow      := low
+    rangeBarCount := 1
+    tradedToday   := false
+else if rangeWin
+    rangeHigh     := math.max(rangeHigh, high)
+    rangeLow      := math.min(rangeLow, low)
+    rangeBarCount += 1
+
+rangeComplete = rangeBarCount >= 15
+longSignal    = inSession and not tradedToday and rangeComplete and close > rangeHigh
+exitSignal    = sessionLastBar and inPosition
+
+tsIso() =>
+    str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+if longSignal
+    tradedToday := true
+    inPosition  := true
+    stopPrice = rangeLow
+    msg = '{"action":"buy","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
+          ',"sl":' + str.tostring(stopPrice) +
+          ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+if exitSignal
+    inPosition := false
+    msg = '{"action":"exit","time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+plot(rangeComplete and inSession ? rangeHigh : na, title="Opening range high", color=color.new(color.green, 0), style=plot.style_stepline, linewidth=1)
+plot(rangeComplete and inSession ? rangeLow  : na, title="Opening range low / stop level", color=color.new(color.orange, 0), style=plot.style_stepline, linewidth=1)
+plotshape(longSignal, title="Long signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(exitSignal, title="Exit signal", style=shape.xcross, location=location.abovebar, color=color.gray, size=size.tiny)
+
+if barstate.islast and timeframe.period != "1"
+    label.new(bar_index, high, "WRONG TIMEFRAME - this script is only validated on the 1-minute chart.\nCurrently running on: " + timeframe.period, style=label.style_label_down, color=color.red, textcolor=color.white)
