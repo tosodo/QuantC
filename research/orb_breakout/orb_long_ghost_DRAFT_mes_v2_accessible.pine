@@ -18,10 +18,15 @@ indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE (Accessible)", overlay=true,
 // ---------------------------------------------------------------------------
 // 1. INPUTS (original, unchanged)
 // ---------------------------------------------------------------------------
-qty         = input.int(1, "Contracts per signal", minval=1, maxval=1, group="Strategy", tooltip="Fixed at 1 MES micro contract - dynamic ATR-based sizing was tested and rejected (see the closed hypothesis note).")
-testMode    = input.bool(true, "Test mode (Ghost dry-run, no real orders)", group="Strategy", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
-stopPoints  = input.float(124.75, "Stop-loss distance (ES points, 99th pctile MAE)", minval=0, group="Strategy")
-timeExitMin = input.int(90, "Underwater time-exit, minutes after entry", minval=1, group="Strategy")
+qty            = input.int(1, "Contracts per signal", minval=1, maxval=1, group="Strategy", tooltip="Fixed at 1 MES micro contract - dynamic ATR-based sizing was tested and rejected (see the closed hypothesis note).")
+testMode       = input.bool(true, "Test mode (Ghost dry-run, no real orders)", group="Strategy", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
+maxRiskDollars = input.float(625, "Max $ risk per trade (stop is derived from this)", minval=1, group="Strategy", tooltip="Stop distance = this / (qty x point value) - see orb_long_ghost_DRAFT_mes_v2.pine's header comment for the full sizing rationale and 5-year backtest result.")
+timeExitMin    = input.int(90, "Underwater time-exit, minutes after entry", minval=1, group="Strategy")
+
+enableFundedPhaseCap  = input.bool(false, "Funded phase: cap profit per trade (Lucid 40% consistency rule)", group="Strategy", tooltip="OFF during evaluation - see orb_long_ghost_DRAFT_mes_v2.pine's header comment. Turn ON once funded.")
+maxDailyProfitDollars = input.float(300, "Max profit per trade before force-exit (funded phase only)", minval=1, group="Strategy", tooltip="Only used when the toggle above is ON. Default $300 = 40% of the confirmed $750/cycle funded payout target.")
+
+stopPoints = maxRiskDollars / (qty * syminfo.pointvalue)
 
 // ---------------------------------------------------------------------------
 // 2. ACCESSIBILITY SETTINGS (new - presentation only, no effect on alerts)
@@ -50,8 +55,11 @@ lineWidthFx  = highContrastMode ? lineWidthInput + 1 : lineWidthInput
 // ---------------------------------------------------------------------------
 // 3. STRATEGY CALCULATIONS (original, unchanged)
 // ---------------------------------------------------------------------------
-if syminfo.ticker != "MES1!" and syminfo.root != "MES"
-    label.new(bar_index, high, "WARNING: this draft is validated for MES only.\nCurrent chart: " + syminfo.ticker + "\nMNQ was tested and rejected - do not run this on MNQ.", style=label.style_label_down, color=warningColor, textcolor=color.black, size=labelSize)
+validSymbol    = syminfo.ticker == "MES1!" or syminfo.root == "MES"
+validTimeframe = timeframe.period == "1"
+
+if barstate.islast and not validSymbol
+    label.new(bar_index, high, "BLOCKED: this draft is validated for MES only.\nCurrent chart: " + syminfo.ticker + "\nMNQ was tested and rejected - no signal will fire here.", style=label.style_label_down, color=warningColor, textcolor=color.black, size=labelSize)
 
 var float rangeHigh       = na
 var float rangeLow        = na
@@ -60,7 +68,6 @@ var bool  tradedToday     = false
 var bool  inPosition      = false
 var float entryPrice      = na
 var int   entryTime       = na
-var bool  timeExitChecked = false
 
 rangeWin        = not na(time(timeframe.period, "0930-0945", "America/New_York"))
 fullSession     = not na(time(timeframe.period, "0945-1600", "America/New_York"))
@@ -72,20 +79,22 @@ if rangeWinStart
     rangeLow        := low
     rangeBarCount   := 1
     tradedToday     := false
-    timeExitChecked := false
 else if rangeWin
     rangeHigh       := math.max(rangeHigh, high)
     rangeLow        := math.min(rangeLow, low)
     rangeBarCount   += 1
 
 rangeComplete = rangeBarCount >= 15
-longSignal    = fullSession and not tradedToday and rangeComplete and close > rangeHigh
+longSignal    = fullSession and not tradedToday and rangeComplete and close > rangeHigh and validSymbol and validTimeframe
 
 minutesSinceEntry = inPosition ? (time - entryTime) / 60000 : na
-timeExitDue        = inPosition and not timeExitChecked and fullSession and minutesSinceEntry >= timeExitMin
-timeExitTriggered   = timeExitDue and close <= entryPrice
+pastTimeExitCutoff = inPosition and fullSession and minutesSinceEntry >= timeExitMin
+timeExitTriggered   = pastTimeExitCutoff and close <= entryPrice   // re-checked every bar past the cutoff (M1 fix)
+unrealizedProfitDollars = inPosition ? (close - entryPrice) * qty * syminfo.pointvalue : na
+profitCapTriggered  = enableFundedPhaseCap and inPosition and unrealizedProfitDollars >= maxDailyProfitDollars
 closeExitSignal     = sessionLastBar and inPosition
-exitSignal           = timeExitTriggered or closeExitSignal
+catchAllFlatten     = inPosition and not fullSession   // half-day / early-close backstop
+exitSignal           = timeExitTriggered or profitCapTriggered or closeExitSignal or catchAllFlatten
 
 tsIso() =>
     str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
@@ -100,19 +109,15 @@ if longSignal
     inPosition      := true
     entryPrice      := close
     entryTime       := time
-    timeExitChecked := false
     stopPrice = close - stopPoints
     msg = '{"action":"buy","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
           ',"sl":' + str.tostring(stopPrice) +
           ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
     alert(msg, alert.freq_once_per_bar_close)
 
-if timeExitDue
-    timeExitChecked := true
-
 if exitSignal
     inPosition := false
-    reason = timeExitTriggered ? "time_exit_90min" : "session_close"
+    reason = profitCapTriggered ? "funded_profit_cap" : timeExitTriggered ? "time_exit_90min" : catchAllFlatten ? "catch_all_flatten" : "session_close"
     lastExitReason := reason
     msg = '{"action":"exit","reason":"' + reason + '","time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
     alert(msg, alert.freq_once_per_bar_close)
@@ -155,7 +160,7 @@ signalStateText() =>
     txt
 
 exitReasonText(reason) =>
-    reason == "time_exit_90min" ? "TIME EXIT (90min underwater)" : reason == "session_close" ? "SESSION CLOSE" : reason
+    reason == "time_exit_90min" ? "TIME EXIT (90min underwater)" : reason == "session_close" ? "SESSION CLOSE" : reason == "funded_profit_cap" ? "FUNDED PROFIT CAP" : reason == "catch_all_flatten" ? "CATCH-ALL FLATTEN (half-day?)" : reason
 
 // ---------------------------------------------------------------------------
 // 6. STRUCTURE VISUALISATION (opening range lines - shape-differentiated, not just colour)
@@ -187,8 +192,8 @@ plotshape(not enableAccessibleMode and exitSignal, title="Exit signal (plain)", 
 // ---------------------------------------------------------------------------
 // 8. WRONG-TIMEFRAME WARNING (original condition, restyled)
 // ---------------------------------------------------------------------------
-if barstate.islast and timeframe.period != "1"
-    label.new(bar_index, high, "⚠ WARNING\nWRONG TIMEFRAME - validated on the 1-minute chart only.\nCurrently running on: " + timeframe.period, style=label.style_label_down, color=warningColor, textcolor=color.black, size=labelSize)
+if barstate.islast and not validTimeframe
+    label.new(bar_index, high, "⛔ BLOCKED\nWRONG TIMEFRAME - validated on the 1-minute chart only.\nCurrently running on: " + timeframe.period + "\nNo signal will fire here.", style=label.style_label_down, color=warningColor, textcolor=color.black, size=labelSize)
 
 // ---------------------------------------------------------------------------
 // 9. DASHBOARD (new - always reflects current state, not historical)
@@ -203,8 +208,8 @@ addRow(rowIdx, lbl, val, valColor) =>
     table.cell(dash, 1, rowIdx, val, text_color=valColor, text_size=size.normal, bgcolor=#1B2230)
 
 if enableAccessibleMode and showDashboard and barstate.islast
-    wrongSymbol    = syminfo.ticker != "MES1!" and syminfo.root != "MES"
-    wrongTimeframe = timeframe.period != "1"
+    wrongSymbol    = not validSymbol
+    wrongTimeframe = not validTimeframe
     row = 0
     addRow(row, "SESSION", sessionStateText(), color.white)
     row += 1
@@ -223,4 +228,4 @@ if enableAccessibleMode and showDashboard and barstate.islast
     addRow(row, "TIME EXIT", str.tostring(timeExitMin) + " min underwater", color.white)
     row += 1
     if wrongSymbol or wrongTimeframe
-        addRow(row, "WARNING", wrongSymbol ? "WRONG SYMBOL" : "WRONG TIMEFRAME", warningColor)
+        addRow(row, "BLOCKED", wrongSymbol ? "WRONG SYMBOL" : "WRONG TIMEFRAME", warningColor)

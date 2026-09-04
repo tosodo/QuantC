@@ -2,26 +2,67 @@
 indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE", overlay=true, max_lines_count=50)
 
 // ============================================================================
-// DRAFT ONLY - this file is not wired to any TradingView alert or Ghost
-// ticker. It is a proposal for review, saved separately from the currently
-// LIVE orb_long_ghost.pine so nothing is overwritten. Do not create a
-// TradingView alert from this script, and do not point a Ghost webhook at
-// it, until you've reviewed it and given explicit go-ahead to deploy.
+// DRAFT ONLY - saved separately from the currently LIVE orb_long_ghost.pine
+// so nothing is overwritten. CORRECTION 2026-09-03: an earlier claim here
+// said this file was "not wired to any TradingView alert or Ghost ticker" -
+// that was wrong. A TradingView alert named "QuantC ORB Long MES v2 - DRAFT"
+// and a matching Ghost ticker ("MES (v2 Draft)") already exist from a prior
+// version of this file, predating this session's C1/C2/M1-M4 fixes. Verified
+// via Ghost's Diagnose panel: that alert last fired 2026-08-28 and shows
+// "Stopped manually" in TradingView's Alerts panel, same day everything else
+// was paused - it is dormant, not a live risk, and (testMode defaulting to
+// true) would only ever have sent test:true dry-run alerts while it ran. But
+// it is NOT nothing, and the code here has changed significantly since it
+// was last live. Before reusing that alert/ticker: delete or replace the old
+// TradingView alert's message with this file's current alert() payload, and
+// confirm test mode / hard gates are what you intend before turning it back
+// on.
 //
 // What changed vs the live script, and why (each change traces to a
 // measured research result - see mes_final_run.py / dynamic_sizing_matrix.py
 // in this folder):
 //
 //   1. Entry window LOCKED at the full 09:45-16:00 ET session - this is
-//      config 4 from mes_final_run.py, measured at 77.8% pass. A narrower
-//      09:45-11:00 window was also tested (config 5) and REJECTED: it only
-//      drops 1.7% of historical trades but cost ~6 points of survival odds
-//      (72.0% vs 77.8%), a larger effect than the trade count alone would
-//      suggest. Full session is the stronger, measured choice.
-//   2. A broker-side stop-loss is sent with the entry alert (`sl` field),
-//      124.75 ES points below entry - the 99th-percentile Maximum-Adverse-
-//      Excursion distance measured in wide_stop_test.py. VERIFIED against
-//      QuantCrawler's own Ghost Webhook JSON Reference
+//      config 4 from mes_final_run.py, measured at 77.8% pass (PRE-M1
+//      figure - see item 3/5 below; this specific full-session-vs-narrow-
+//      window comparison has not been re-run under the post-M1 mechanism).
+//      A narrower 09:45-11:00 window was also tested (config 5) and
+//      REJECTED: it only drops 1.7% of historical trades but cost ~6
+//      points of survival odds (72.0% vs 77.8%), a larger effect than the
+//      trade count alone would suggest. Full session was the stronger,
+//      measured choice at the time; re-test before assuming the same
+//      ranking still holds post-M1.
+//   2. A broker-side stop-loss is sent with the entry alert (`sl` field).
+//      Stop distance is DERIVED from a dollar-risk cap (`maxRiskDollars`),
+//      not a fixed point constant: stop = maxRiskDollars /
+//      (qty x syminfo.pointvalue). This mechanism was added 2026-09-03
+//      after the original fixed 124.75-point 99th-percentile-MAE stop
+//      (wide_stop_test.py, $623.77 on 1 MES) was flagged as an oversized
+//      single-trade risk relative to this account's $1,800 daily limit.
+//      FIRST TRIED $270 (landing just under MES's measured 90th-percentile
+//      MAE), then ACTUALLY BACKTESTED it - see mes_c1_stop_rerun.py, full
+//      5-year history, same cost model and firm rules as mes_final_run.py.
+//      Result (PRE-M1 figures - both sides of this comparison used the
+//      time-exit's original one-time checkpoint, item 3/5 below; the
+//      relative conclusion below has not been re-verified post-M1): the
+//      $270/54-point stop fires 5.7% of the time once combined with the
+//      90-min time-exit (vs the old stop's 0.2%), and that extra firing
+//      measurably HURT survivability - 74.60/67.58/59.51% pass (no/1-tick/
+//      2-tick slippage) vs the old stop's 77.82/71.60/64.29%. Reason: this
+//      strategy trades at most once per day, so a
+//      single trade's stop-out was never actually close to breaching the
+//      $1,800 DAILY limit at either distance - the metric that actually
+//      determines eval survival is the $3,000 TOTAL trailing drawdown,
+//      and on that metric a stop wide enough to rarely fire (letting the
+//      time-exit do the real risk-cutting) beats a tighter one that fires
+//      often enough to double up with it. maxRiskDollars is now $625
+//      (125.0 pts, ~ the original 124.75pt distance) - the daily-limit-
+//      percentage framing that motivated $270 was not the metric that
+//      predicted outcomes; measured 5-year survivability was. The dollar-
+//      cap MECHANISM is kept (still tied to account size, still a labeled
+//      input instead of a magic constant) even though the chosen distance
+//      now lands back near where research already said it should be.
+//      VERIFIED against QuantCrawler's own Ghost Webhook JSON Reference
 //      (https://quantcrawler.com/guides/ghost-webhook-json, checked
 //      2026-08-21): `sl` is documented as an "Absolute stop price" (a
 //      price level, not a point/tick offset) - confirming the value this
@@ -31,32 +72,53 @@ indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE", overlay=true, max_lines_co
 //      toggles, not the one SETUP_GUIDE.md currently mentions - and that
 //      "a stop on the wrong side of entry is discarded" (not a concern
 //      here - this stop is always below a long entry).
-//   3. A 90-minute "underwater" time exit: 90 minutes after entry, if the
-//      position is not net profitable (after an estimated cost), send a
-//      market exit alert immediately rather than holding to the close.
-//      Checked once per trade, not on every bar after minute 90 - matches
-//      the tested convention exactly (mes_final_run.py resolve_exit()).
-//      The exit alert's "reason" field is custom (not one of Ghost's
+//   3. A 90-minute "underwater" time exit: from 90 minutes after entry
+//      onward, if the position is not net profitable (after an estimated
+//      cost), send a market exit alert immediately rather than holding to
+//      the close. UPDATED 2026-09-03 (QC report M1): re-checked on EVERY
+//      bar past the 90-minute mark, not just the first one. The original
+//      one-time checkpoint (matching mes_final_run.py's original
+//      resolve_exit()) meant being green by a single tick at exactly that
+//      one bar disabled the underwater exit for the rest of the day, even
+//      if the trade went underwater later. Backtested both ways on the
+//      full 5-year history before changing (mes_m1_m4_checks.py): re-
+//      checking every bar raised the pass rate from 77.80% to 84.27% and
+//      even eliminated the rare stop-loss hits entirely (they're now
+//      almost always caught by the time-exit first) - a real, broad
+//      improvement across the sample, not a single-trade fluke. NOTE this
+//      changes exit timing broadly enough that the H3 take-profit sweep
+//      (mes_takeprofit_sweep.py, which tested against the pre-M1 time-exit)
+//      and the entry-window/C1 comparisons in items 1-2 above have not been
+//      re-verified under this mechanism - directionally likely to still
+//      hold, not re-confirmed. The exit alert's "reason" field is custom
+//      (not one of Ghost's
 //      documented exit_type values, which are tp/sl/trail/be - none fit a
 //      time-based exit) - safe to send anyway, since Ghost's docs say
 //      unknown fields are ignored, not rejected.
-//   4. A soft on-chart warning if this is not running on an MES chart
+//   4. A hard gate if this is not running on MES / the 1-minute chart
 //      (MNQ was tested and closed - 30-35% pass rate, discarded per your
-//      instruction). This does not block anything; TradingView alerts
-//      cannot be restricted to one ticker from inside the script - you
+//      instruction). `validSymbol` and `validTimeframe` are ANDed directly
+//      into `longSignal`, so no entry alert can fire on the wrong chart -
+//      this is enforced in-script, not just a label. TradingView alerts
+//      still can't be restricted to one ticker from the outside, so you
 //      still need to create the TradingView alert on the MES1! chart only
-//      and not duplicate it onto MNQ1!, same as any other Pine alert.
+//      and not duplicate it onto MNQ1!, same as any other Pine alert - but
+//      if that ever happens by mistake, this script will now refuse to
+//      trade rather than firing with a mis-scaled stop.
 //
-//   5. Execution slippage was measured (mes_final_run.py configs 6-7,
-//      2026-08-21): applying 1-2 adverse ticks to EVERY exit fill - the
-//      stop, the 90-min time exit, AND the scheduled session close (most
-//      trades, ~57% of them, exit at the close, so this matters more than
-//      testing the stop/time fills alone would suggest):
-//        no slippage (this script's baseline) ......... 77.82% pass
-//        1 tick  (0.25 pt) adverse, all exits .......... 71.60% pass
-//        2 ticks (0.50 pt) adverse, all exits .......... 64.29% pass
-//      Take the 77.8% headline as optimistic - realistic live fills land
-//      somewhere between the 1-tick and 2-tick rows above, not at the top.
+//   5. Execution slippage, applying 1-2 adverse ticks to EVERY exit fill -
+//      the stop, the 90-min time exit, AND the scheduled session close.
+//      RE-MEASURED 2026-09-03 after the M1 fix (item 3) changed the time-
+//      exit mechanism - the original 77.82/71.60/64.29% figures (measured
+//      2026-08-21, before M1) are superseded, not just re-labeled:
+//        no slippage ................................... 84.27% pass
+//        1 tick  (0.25 pt) adverse, all exits .......... 77.64% pass
+//        2 ticks (0.50 pt) adverse, all exits .......... 68.78% pass
+//      Every row improved over its pre-M1 counterpart (roughly +6-7 points
+//      at every slippage level) - the fix is not a one-off, it holds up
+//      once realistic fill quality is applied too. Take the 84.3% headline
+//      as optimistic - realistic live fills land somewhere between the
+//      1-tick and 2-tick rows above, not at the top.
 //
 // STILL OPEN, not yet resolved before this should go live:
 //   - In Ghost's dashboard, the MES ticker needs BOTH "Use Stop Loss and
@@ -65,15 +127,48 @@ indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE", overlay=true, max_lines_co
 //     first one OFF (that guide describes the OLD, no-stop mechanism).
 //     Both toggles are manual changes in Ghost's UI, not something this
 //     script can do - yours to flip deliberately, same as Test mode.
+//
+// RESOLVED, no code change needed:
+//   - QC report M4 (unfiltered gap/extension entries): tested requiring the
+//     breakout close to stay within 1.0/1.5/2.0x the opening range's own
+//     width beyond rangeHigh, on the full 5-year history
+//     (mes_m1_m4_checks.py). Zero of 662 historical trades exceeded even
+//     the tightest (1.0x) cap - because entry fires on the FIRST 1-min bar
+//     that closes above rangeHigh, extensions beyond the range are already
+//     naturally small by construction. The concern doesn't materialize for
+//     this entry rule; no filter added.
+//   - QC report H4 (long-only design): this script only enters on breakouts
+//     above rangeHigh - breakdowns below rangeLow are tracked (for the
+//     range itself) but never traded. Discussed 2026-09-03: a short-side
+//     mirror is a genuinely different, unvalidated strategy (downside
+//     moves in index futures often behave asymmetrically - faster, more
+//     gap-prone), not a free extension of this one, and adding a second
+//     unvalidated strategy to a live eval account carries real risk.
+//     Decision: leave this long-only by design. If revisited, a short
+//     mirror should get the same treatment as every other change here -
+//     backtested standalone against the full 5-year history before ever
+//     touching Ghost - not bolted on directly.
 // ============================================================================
+//
+// QC REPORT STATUS: C1/C2/C3 (critical), H1/H2/H3/H4 (high), M1/M2/M3/M4
+// (medium) are all closed as of 2026-09-03 - see items above for what
+// changed, and this note for what didn't.
 
-qty         = input.int(1, "Contracts per signal", minval=1, maxval=1, tooltip="Fixed at 1 MES micro contract - dynamic ATR-based sizing was tested and rejected (see the closed hypothesis note).")
-testMode    = input.bool(true, "Test mode (Ghost dry-run, no real orders)", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
-stopPoints  = input.float(124.75, "Stop-loss distance (ES points, 99th pctile MAE)", minval=0)
-timeExitMin = input.int(90, "Underwater time-exit, minutes after entry", minval=1)
+qty            = input.int(1, "Contracts per signal", minval=1, maxval=1, tooltip="Fixed at 1 MES micro contract - dynamic ATR-based sizing was tested and rejected (see the closed hypothesis note).")
+testMode       = input.bool(true, "Test mode (Ghost dry-run, no real orders)", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
+maxRiskDollars = input.float(625, "Max $ risk per trade (stop is derived from this)", minval=1, tooltip="Stop distance = this / (qty x point value), so dollar risk per trade is fixed regardless of how wide MES moves that day. Default ($625, ~125 pts) was chosen after backtesting a tighter $270 cap on the full 5-year history and finding it measurably hurt survivability (mes_c1_stop_rerun.py) - this value lands back near the original 99th-percentile-MAE distance (124.75 pts) that research already validated. See the header comment for the full story.")
+timeExitMin    = input.int(90, "Underwater time-exit, minutes after entry", minval=1)
 
-if syminfo.ticker != "MES1!" and syminfo.root != "MES"
-    label.new(bar_index, high, "WARNING: this draft is validated for MES only.\nCurrent chart: " + syminfo.ticker + "\nMNQ was tested and rejected - do not run this on MNQ.", style=label.style_label_down, color=color.red, textcolor=color.white)
+enableFundedPhaseCap  = input.bool(false, "Funded phase: cap profit per trade (Lucid 40% consistency rule)", tooltip="OFF during evaluation - the eval has no consistency rule, so capping profit here would only give away progress toward the $6,000 target for no benefit (see the header comment). Turn ON once funded, where a single oversized day can breach the rule that no day may exceed 40% of the payout cycle's total profit.")
+maxDailyProfitDollars = input.float(300, "Max profit per trade before force-exit (funded phase only)", minval=1, tooltip="Only used when the toggle above is ON. Default $300 = 40% of the confirmed $750/cycle funded payout target - edit if your funded terms differ. Since this strategy trades at most once per day, capping per-trade profit is equivalent to capping daily profit.")
+
+stopPoints = maxRiskDollars / (qty * syminfo.pointvalue)
+
+validSymbol    = syminfo.ticker == "MES1!" or syminfo.root == "MES"
+validTimeframe = timeframe.period == "1"
+
+if barstate.islast and not validSymbol
+    label.new(bar_index, high, "BLOCKED: this draft is validated for MES only.\nCurrent chart: " + syminfo.ticker + "\nMNQ was tested and rejected - no signal will fire here.", style=label.style_label_down, color=color.red, textcolor=color.white)
 
 var float rangeHigh       = na
 var float rangeLow        = na
@@ -82,7 +177,6 @@ var bool  tradedToday     = false
 var bool  inPosition      = false
 var float entryPrice      = na
 var int   entryTime       = na
-var bool  timeExitChecked = false
 
 rangeWin        = not na(time(timeframe.period, "0930-0945", "America/New_York"))
 fullSession     = not na(time(timeframe.period, "0945-1600", "America/New_York"))
@@ -94,20 +188,22 @@ if rangeWinStart
     rangeLow        := low
     rangeBarCount   := 1
     tradedToday     := false
-    timeExitChecked := false
 else if rangeWin
     rangeHigh       := math.max(rangeHigh, high)
     rangeLow        := math.min(rangeLow, low)
     rangeBarCount   += 1
 
 rangeComplete = rangeBarCount >= 15
-longSignal    = fullSession and not tradedToday and rangeComplete and close > rangeHigh
+longSignal    = fullSession and not tradedToday and rangeComplete and close > rangeHigh and validSymbol and validTimeframe
 
 minutesSinceEntry = inPosition ? (time - entryTime) / 60000 : na
-timeExitDue        = inPosition and not timeExitChecked and fullSession and minutesSinceEntry >= timeExitMin
-timeExitTriggered   = timeExitDue and close <= entryPrice   // "underwater or breakeven" per the spec
+pastTimeExitCutoff = inPosition and fullSession and minutesSinceEntry >= timeExitMin
+timeExitTriggered   = pastTimeExitCutoff and close <= entryPrice   // "underwater or breakeven" per the spec, re-checked every bar past the cutoff (M1 fix - was a single one-time checkpoint, backtested and confirmed to measurably help: 84.27% vs 77.80% pass, mes_m1_m4_checks.py)
+unrealizedProfitDollars = inPosition ? (close - entryPrice) * qty * syminfo.pointvalue : na
+profitCapTriggered  = enableFundedPhaseCap and inPosition and unrealizedProfitDollars >= maxDailyProfitDollars
 closeExitSignal     = sessionLastBar and inPosition
-exitSignal           = timeExitTriggered or closeExitSignal
+catchAllFlatten     = inPosition and not fullSession   // half-day / early-close backstop: sessionLastBar's fixed 1559-1600 window never arrives on a day that closes early, so flatten the moment the session window itself ends instead of waiting for that fixed clock time
+exitSignal           = timeExitTriggered or profitCapTriggered or closeExitSignal or catchAllFlatten
 
 tsIso() =>
     str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
@@ -117,19 +213,15 @@ if longSignal
     inPosition      := true
     entryPrice      := close
     entryTime       := time
-    timeExitChecked := false
     stopPrice = close - stopPoints
     msg = '{"action":"buy","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
           ',"sl":' + str.tostring(stopPrice) +
           ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
     alert(msg, alert.freq_once_per_bar_close)
 
-if timeExitDue
-    timeExitChecked := true
-
 if exitSignal
     inPosition := false
-    reason = timeExitTriggered ? "time_exit_90min" : "session_close"
+    reason = profitCapTriggered ? "funded_profit_cap" : timeExitTriggered ? "time_exit_90min" : catchAllFlatten ? "catch_all_flatten" : "session_close"
     msg = '{"action":"exit","reason":"' + reason + '","time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
     alert(msg, alert.freq_once_per_bar_close)
 
@@ -139,5 +231,5 @@ plot(inPosition ? entryPrice - stopPoints : na, title="Stop-loss level", color=c
 plotshape(longSignal, title="Long signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
 plotshape(exitSignal, title="Exit signal", style=shape.xcross, location=location.abovebar, color=color.gray, size=size.tiny)
 
-if barstate.islast and timeframe.period != "1"
-    label.new(bar_index, high, "WRONG TIMEFRAME - this script is only validated on the 1-minute chart.\nCurrently running on: " + timeframe.period, style=label.style_label_down, color=color.red, textcolor=color.white)
+if barstate.islast and not validTimeframe
+    label.new(bar_index, high, "BLOCKED: this script is only validated on the 1-minute chart.\nCurrently running on: " + timeframe.period + "\nNo signal will fire here.", style=label.style_label_down, color=color.red, textcolor=color.white)
