@@ -1,5 +1,5 @@
 //@version=5
-indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE (Accessible)", overlay=true, max_lines_count=50, max_labels_count=500)
+indicator("QuantC ORB Long MES v2 (validated) - Ghost (Accessible)", overlay=true, max_lines_count=50, max_labels_count=500)
 
 // ============================================================================
 // ACCESSIBLE VERSION of orb_long_ghost_DRAFT_mes_v2.pine.
@@ -13,13 +13,25 @@ indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE (Accessible)", overlay=true,
 //
 // See orb_long_ghost_DRAFT_mes_v2.pine for the full research rationale
 // (stop distance, time-exit, slippage findings) - not repeated here.
+//
+// LIVE since 2026-09-09: testMode was switched off and the TradingView alert
+// recreated so real orders reach Ghost/Tradovate. This file was renamed and
+// re-synced 2026-09-10 to match that deployed state (was previously titled
+// "DRAFT, NOT LIVE" with testMode defaulting to true here even though the
+// live copy on TradingView had already been changed - the two had drifted
+// apart). Named "(validated) - Ghost" to match the naming pattern already
+// used for the other proven strategies. The sibling
+// orb_long_ghost_DRAFT_mes_v2.pine (non-accessible) is NOT live - it is
+// intentionally still a dormant draft, sitting unused on the "QuantC -
+// Drafts & Testing" chart, and correctly keeps its "DRAFT, NOT LIVE" name
+// and testMode=true default.
 // ============================================================================
 
 // ---------------------------------------------------------------------------
 // 1. INPUTS (original, unchanged)
 // ---------------------------------------------------------------------------
 qty            = input.int(1, "Contracts per signal", minval=1, maxval=1, group="Strategy", tooltip="Fixed at 1 MES micro contract - dynamic ATR-based sizing was tested and rejected (see the closed hypothesis note).")
-testMode       = input.bool(true, "Test mode (Ghost dry-run, no real orders)", group="Strategy", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
+testMode       = input.bool(false, "Test mode (Ghost dry-run, no real orders)", group="Strategy", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
 maxRiskDollars = input.float(625, "Max $ risk per trade (stop is derived from this)", minval=1, group="Strategy", tooltip="Stop distance = this / (qty x point value) - see orb_long_ghost_DRAFT_mes_v2.pine's header comment for the full sizing rationale and 5-year backtest result.")
 timeExitMin    = input.int(90, "Underwater time-exit, minutes after entry", minval=1, group="Strategy")
 
