@@ -1,0 +1,129 @@
+//@version=5
+strategy("QuantC VWAP Fade - BACKTEST ONLY", overlay=true, initial_capital=100000,
+     default_qty_type=strategy.fixed, default_qty_value=1, pyramiding=0,
+     process_orders_on_close=true, calc_on_every_tick=false,
+     commission_type=strategy.commission.cash_per_contract, commission_value=0.85,
+     slippage=1, max_labels_count=500)
+
+// ============================================================================
+// BACKTEST-ONLY COPY of vwap_fade_ghost_DRAFT.pine, for TradingView's Strategy
+// Tester. This file sends NO alerts and is never wired to Ghost - it exists
+// only so the entry/exit logic can be measured against history. Do not create
+// a TradingView alert from this script.
+//
+// Entry/exit CONDITIONS are copied verbatim from the DRAFT (same VWAP/stdev
+// bands, same RSI + volume-exhaustion filters, same VWAP-reversion exit,
+// same session-close flatten, same max-trades-per-day cap). The only
+// difference is mechanical: this version calls strategy.entry()/strategy.exit()
+// so TradingView can simulate fills, P&L, and drawdown, instead of calling
+// alert() to notify Ghost. It also uses strategy.position_size directly
+// instead of a manually tracked inPosition/posSide flag, since the strategy
+// engine's own position state is the more reliable source of truth for a
+// backtest.
+//
+// RUN THIS ON THE SAME CHART AS THE LIVE SCRIPT: MNQ1! (or MES1!), 1-minute
+// timeframe. TradingView prices P&L using the actual instrument's point
+// value from the chart's symbol - running this on the wrong symbol or
+// timeframe will produce meaningless numbers.
+//
+// COMMISSION / SLIPPAGE ASSUMPTIONS: commission is set to $0.85 per
+// contract per side and slippage to 1 tick, in the strategy() line above -
+// reasonable low-cost futures broker ballparks, NOT your confirmed
+// Tradovate/Lucid rate. These two settings can only be set on that line
+// (Pine Script requires them to be fixed there, not in the Inputs tab) -
+// check your actual statement and edit commission_value/slippage above
+// before trusting the dollar totals.
+// ============================================================================
+
+enableShort     = input.bool(true, "Allow short (fade down) entries")
+rsiLength       = input.int(14, "RSI length", minval=1)
+oversoldLevel   = input.int(30, "RSI oversold level (long entry)", minval=1, maxval=100)
+overboughtLevel = input.int(70, "RSI overbought level (short entry)", minval=1, maxval=100)
+entryBandMult   = input.float(2.0, "Entry trigger - standard deviations from VWAP", minval=0.5)
+stopBandMult    = input.float(3.0, "Stop-loss - standard deviations from VWAP", minval=0.5, tooltip="Must be wider than the entry trigger multiple above.")
+volAvgLength    = input.int(5, "Volume-exhaustion average length (bars)", minval=1)
+warmupBars      = input.int(30, "Warm-up bars before signals are allowed", minval=5)
+maxTradesPerDay = input.int(3, "Max trades per day", minval=1)
+entryCutoffMins = input.int(15, "Stop new entries this many minutes before session close", minval=0, maxval=60, tooltip="2026-09-02 tweak: several backtest losses were entries fired right before the 4pm flatten, with no time to revert. This blocks NEW entries in the final N minutes of the session - it does not affect exits or the session-close flatten.")
+
+var float cumPV         = na
+var float cumPV2        = na
+var float cumVol        = na
+var int   barsInSession  = 0
+var int   tradesToday    = 0
+
+fullSession    = not na(time(timeframe.period, "0930-1600", "America/New_York"))
+sessionLastBar = not na(time(timeframe.period, "1559-1600", "America/New_York"))
+sessionStart   = fullSession and not fullSession[1]
+
+if sessionStart
+    cumPV         := 0.0
+    cumPV2        := 0.0
+    cumVol        := 0.0
+    barsInSession := 0
+    tradesToday   := 0
+
+if fullSession
+    typicalPrice   = hlc3
+    cumPV          += typicalPrice * volume
+    cumPV2         += typicalPrice * typicalPrice * volume
+    cumVol         += volume
+    barsInSession  += 1
+
+vwap      = cumVol > 0 ? cumPV / cumVol : na
+variance  = cumVol > 0 ? math.max(cumPV2 / cumVol - vwap * vwap, 0) : na
+stdevBand = not na(variance) ? math.sqrt(variance) : na
+
+warmupDone = barsInSession >= warmupBars
+haveBands  = warmupDone and not na(stdevBand) and stdevBand > 0
+
+upperEntry = haveBands ? vwap + entryBandMult * stdevBand : na
+lowerEntry = haveBands ? vwap - entryBandMult * stdevBand : na
+upperStop  = haveBands ? vwap + stopBandMult * stdevBand : na
+lowerStop  = haveBands ? vwap - stopBandMult * stdevBand : na
+
+rsi           = ta.rsi(close, rsiLength)
+volAvg        = ta.sma(volume, volAvgLength)
+volExhaustion = volume < volAvg
+
+etHour        = hour(time, "America/New_York")
+etMinute      = minute(time, "America/New_York")
+minsToClose   = (16 * 60) - (etHour * 60 + etMinute)
+withinCutoff  = fullSession and minsToClose <= entryCutoffMins
+
+canEnter = fullSession and haveBands and strategy.position_size == 0 and tradesToday < maxTradesPerDay and not withinCutoff
+
+longSignal  = canEnter and close < lowerEntry and rsi < oversoldLevel and volExhaustion
+shortSignal = canEnter and enableShort and close > upperEntry and rsi > overboughtLevel and volExhaustion
+
+reversionExitLong  = strategy.position_size > 0 and close >= vwap
+reversionExitShort = strategy.position_size < 0 and close <= vwap
+closeExitSignal    = sessionLastBar and strategy.position_size != 0
+
+if longSignal
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Long Stop", from_entry="Long", stop=lowerStop, comment="stop")
+    tradesToday += 1
+
+if shortSignal
+    strategy.entry("Short", strategy.short)
+    strategy.exit("Short Stop", from_entry="Short", stop=upperStop, comment="stop")
+    tradesToday += 1
+
+if reversionExitLong
+    strategy.close("Long", comment="vwap_reversion")
+
+if reversionExitShort
+    strategy.close("Short", comment="vwap_reversion")
+
+if closeExitSignal
+    strategy.close_all(comment="session_close")
+
+plot(haveBands ? vwap : na, title="Session VWAP", color=color.new(color.yellow, 0), style=plot.style_line, linewidth=2)
+plot(haveBands ? upperEntry : na, title="Upper entry band", color=color.new(color.red, 30), style=plot.style_line, linewidth=1)
+plot(haveBands ? lowerEntry : na, title="Lower entry band", color=color.new(color.green, 30), style=plot.style_line, linewidth=1)
+plotshape(longSignal, title="Long fade signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortSignal, title="Short fade signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+
+if barstate.islast and timeframe.period != "1"
+    label.new(bar_index, high, "BACKTEST ONLY - run on the 1-minute chart to match the live design.\nCurrently running on: " + timeframe.period, style=label.style_label_down, color=color.red, textcolor=color.white)

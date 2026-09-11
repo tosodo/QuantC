@@ -1,0 +1,253 @@
+//@version=5
+indicator("QuantC VWAP Fade - DRAFT, NOT LIVE (Accessible)", overlay=true, max_lines_count=50, max_labels_count=500)
+
+// ============================================================================
+// ACCESSIBLE VERSION of vwap_fade_ghost_DRAFT.pine.
+//
+// TRADING LOGIC IS UNCHANGED - every line under "STRATEGY CALCULATIONS" and
+// "ENTRY / EXIT" below, and the three alert() calls, are copied verbatim
+// from the plain draft. Everything below "ACCESSIBILITY SETTINGS" and
+// "VISUALS" only reads values the original script already computes and
+// draws them more clearly (dashboard, labelled bands, high-contrast mode).
+//
+// See vwap_fade_ghost_DRAFT.pine for the full research rationale, the Lucid/
+// Ghost hedging safety notes, and the still-open items (no backtest yet,
+// needs its own Ghost ticker slot) - not repeated here. THIS IS STILL AN
+// UNBACKTESTED DRAFT, not wired to any live alert.
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// 1. INPUTS (original, unchanged)
+// ---------------------------------------------------------------------------
+qty             = input.int(1, "Contracts per signal", minval=1, maxval=1, group="Strategy", tooltip="Fixed at 1 micro contract, matching the sizing convention used on MNQ/MES.")
+testMode        = input.bool(true, "Test mode (Ghost dry-run, no real orders)", group="Strategy", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
+enableShort     = input.bool(true, "Allow short (fade down) entries", group="Strategy", tooltip="Turn off to run long-fade only.")
+rsiLength       = input.int(14, "RSI length", minval=1, group="Strategy")
+oversoldLevel   = input.int(30, "RSI oversold level (long entry)", minval=1, maxval=100, group="Strategy")
+overboughtLevel = input.int(70, "RSI overbought level (short entry)", minval=1, maxval=100, group="Strategy")
+entryBandMult   = input.float(2.0, "Entry trigger - standard deviations from VWAP", minval=0.5, group="Strategy")
+stopBandMult    = input.float(3.0, "Stop-loss - standard deviations from VWAP", minval=0.5, group="Strategy", tooltip="Must be wider than the entry trigger multiple above.")
+volAvgLength    = input.int(5, "Volume-exhaustion average length (bars)", minval=1, group="Strategy")
+warmupBars      = input.int(30, "Warm-up bars before signals are allowed", minval=5, group="Strategy", tooltip="Bars since session open before the VWAP/stdev estimate is trusted.")
+maxTradesPerDay = input.int(3, "Max trades per day", minval=1, group="Strategy")
+
+// ---------------------------------------------------------------------------
+// 2. ACCESSIBILITY SETTINGS (new - presentation only, no effect on alerts)
+// ---------------------------------------------------------------------------
+enableAccessibleMode = input.bool(true, "Enable accessible mode", group="Accessibility Settings", tooltip="Master switch for everything below. Turn off to fall back to the plain original chart.")
+showDashboard         = input.bool(true, "Show status dashboard", group="Accessibility Settings")
+dashPosition          = input.string("Top Right", "Dashboard position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group="Accessibility Settings")
+showEntryLabels       = input.bool(true, "Show ENTRY labels", group="Accessibility Settings")
+showStopLabels        = input.bool(true, "Show STOP labels", group="Accessibility Settings")
+showExitLabels        = input.bool(true, "Show EXIT labels", group="Accessibility Settings")
+showHistoricalSignals = input.bool(true, "Show historical signals", group="Accessibility Settings", tooltip="If off, only the most recent trade's labels are kept on the chart.")
+maxHistoricalSignals  = input.int(20, "Max historical signals to keep", minval=1, maxval=200, group="Accessibility Settings")
+signalLabelSize       = input.string("Large", "Signal label size", options=["Normal", "Large"], group="Accessibility Settings")
+lineWidthInput        = input.int(2, "Line width (VWAP / bands)", minval=1, maxval=6, group="Accessibility Settings")
+highContrastMode      = input.bool(true, "High contrast mode", group="Accessibility Settings", tooltip="Increases line width and uses fully opaque colours when on.")
+
+vwapColor      = input.color(#FFD166, "VWAP colour", group="Accessibility Colours")
+longColor      = input.color(color.white, "Long entry / band colour", group="Accessibility Colours")
+shortColor     = input.color(#FF6B6B, "Short entry / band colour", group="Accessibility Colours")
+stopColor      = input.color(#FF9F1C, "Stop colour", group="Accessibility Colours")
+exitColor      = input.color(#B8C0CC, "Exit colour", group="Accessibility Colours")
+warningColor   = input.color(#FFD166, "Warning colour", group="Accessibility Colours")
+
+labelSize   = signalLabelSize == "Large" ? size.large : size.normal
+lineWidthFx = highContrastMode ? lineWidthInput + 1 : lineWidthInput
+
+// ---------------------------------------------------------------------------
+// 3. STRATEGY CALCULATIONS (original, unchanged)
+// ---------------------------------------------------------------------------
+var float cumPV        = na
+var float cumPV2       = na
+var float cumVol       = na
+var int   barsInSession = 0
+var int   tradesToday   = 0
+var bool  inPosition    = false
+var string posSide      = na
+var float entryPrice    = na
+var float stopPrice     = na
+
+fullSession    = not na(time(timeframe.period, "0930-1600", "America/New_York"))
+sessionLastBar = not na(time(timeframe.period, "1559-1600", "America/New_York"))
+sessionStart   = fullSession and not fullSession[1]
+
+if sessionStart
+    cumPV         := 0.0
+    cumPV2        := 0.0
+    cumVol        := 0.0
+    barsInSession := 0
+    tradesToday   := 0
+
+if fullSession
+    typicalPrice   = hlc3
+    cumPV          += typicalPrice * volume
+    cumPV2         += typicalPrice * typicalPrice * volume
+    cumVol         += volume
+    barsInSession  += 1
+
+vwap      = cumVol > 0 ? cumPV / cumVol : na
+variance  = cumVol > 0 ? math.max(cumPV2 / cumVol - vwap * vwap, 0) : na
+stdevBand = not na(variance) ? math.sqrt(variance) : na
+
+warmupDone = barsInSession >= warmupBars
+haveBands  = warmupDone and not na(stdevBand) and stdevBand > 0
+
+upperEntry = haveBands ? vwap + entryBandMult * stdevBand : na
+lowerEntry = haveBands ? vwap - entryBandMult * stdevBand : na
+upperStop  = haveBands ? vwap + stopBandMult * stdevBand : na
+lowerStop  = haveBands ? vwap - stopBandMult * stdevBand : na
+
+rsi           = ta.rsi(close, rsiLength)
+volAvg        = ta.sma(volume, volAvgLength)
+volExhaustion = volume < volAvg
+
+canEnter = fullSession and haveBands and not inPosition and tradesToday < maxTradesPerDay
+
+longSignal  = canEnter and close < lowerEntry and rsi < oversoldLevel and volExhaustion
+shortSignal = canEnter and enableShort and close > upperEntry and rsi > overboughtLevel and volExhaustion
+
+reversionExitLong  = inPosition and posSide == "long"  and close >= vwap
+reversionExitShort = inPosition and posSide == "short" and close <= vwap
+closeExitSignal    = sessionLastBar and inPosition
+exitSignal         = reversionExitLong or reversionExitShort or closeExitSignal
+
+tsIso() =>
+    str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+// ---------------------------------------------------------------------------
+// 4. ENTRY / EXIT + ALERTS (original, unchanged - this is what Ghost receives)
+// ---------------------------------------------------------------------------
+if longSignal
+    inPosition  := true
+    posSide     := "long"
+    entryPrice  := close
+    stopPrice   := lowerStop
+    tradesToday += 1
+    msg = '{"action":"buy","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
+          ',"sl":' + str.tostring(stopPrice) +
+          ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+if shortSignal
+    inPosition  := true
+    posSide     := "short"
+    entryPrice  := close
+    stopPrice   := upperStop
+    tradesToday += 1
+    msg = '{"action":"sell","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
+          ',"sl":' + str.tostring(stopPrice) +
+          ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+if exitSignal
+    reason = closeExitSignal ? "session_close" : "vwap_reversion"
+    inPosition := false
+    posSide    := na
+    msg = '{"action":"exit","reason":"' + reason + '","time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+// ---------------------------------------------------------------------------
+// 5. VISUAL HELPERS (new)
+// ---------------------------------------------------------------------------
+var label[] signalLabels = array.new_label()
+
+trackLabel(lbl) =>
+    array.push(signalLabels, lbl)
+    keep = showHistoricalSignals ? maxHistoricalSignals * 3 : 3
+    if array.size(signalLabels) > keep
+        label.delete(array.shift(signalLabels))
+
+sessionStateText() =>
+    string txt = na
+    if not fullSession
+        txt := "SESSION CLOSED"
+    else if not warmupDone
+        txt := "WARMING UP"
+    else if inPosition
+        txt := "IN TRADE"
+    else
+        txt := "IN SESSION"
+    txt
+
+signalStateText() =>
+    string txt = na
+    if inPosition
+        txt := posSide == "long" ? "LONG (OPEN)" : "SHORT (OPEN)"
+    else if tradesToday >= maxTradesPerDay
+        txt := "DONE FOR DAY - MAX TRADES HIT"
+    else if not haveBands
+        txt := "NO TRADE - WARMING UP"
+    else
+        txt := "NO TRADE - WAITING FOR EXTENSION"
+    txt
+
+// ---------------------------------------------------------------------------
+// 6. VWAP / BAND VISUALISATION (shape-differentiated, not just colour)
+// ---------------------------------------------------------------------------
+plot(haveBands ? vwap : na, title="Session VWAP", color=enableAccessibleMode ? vwapColor : color.new(color.yellow, 0), style=plot.style_line, linewidth=enableAccessibleMode ? lineWidthFx + 1 : 2)
+plot(haveBands ? upperEntry : na, title="Upper entry band (short trigger)", color=enableAccessibleMode ? shortColor : color.new(color.red, 30), style=plot.style_line, linewidth=enableAccessibleMode ? lineWidthFx : 1)
+plot(haveBands ? lowerEntry : na, title="Lower entry band (long trigger)", color=enableAccessibleMode ? longColor : color.new(color.green, 30), style=enableAccessibleMode ? plot.style_circles : plot.style_line, linewidth=enableAccessibleMode ? lineWidthFx : 1)
+plot(inPosition ? stopPrice : na, title="Stop-loss level", color=enableAccessibleMode ? stopColor : color.new(color.orange, 0), style=plot.style_stepline_diamond, linewidth=enableAccessibleMode ? lineWidthFx : 1)
+
+// ---------------------------------------------------------------------------
+// 7. SIGNAL / ENTRY / STOP / EXIT LABELS (new - bounded, event-anchored)
+// ---------------------------------------------------------------------------
+if enableAccessibleMode and longSignal and showEntryLabels
+    longLbl = label.new(bar_index, low, "▲ LONG FADE\nENTRY " + str.tostring(close, format.mintick), style=label.style_label_up, color=longColor, textcolor=color.black, size=labelSize)
+    trackLabel(longLbl)
+
+if enableAccessibleMode and shortSignal and showEntryLabels
+    shortLbl = label.new(bar_index, high, "▼ SHORT FADE\nENTRY " + str.tostring(close, format.mintick), style=label.style_label_down, color=shortColor, textcolor=color.white, size=labelSize)
+    trackLabel(shortLbl)
+
+if enableAccessibleMode and (longSignal or shortSignal) and showStopLabels
+    stopLbl = label.new(bar_index, stopPrice, "✕ STOP\n" + str.tostring(stopPrice, format.mintick), style=longSignal ? label.style_label_down : label.style_label_up, color=stopColor, textcolor=color.white, size=labelSize)
+    trackLabel(stopLbl)
+
+if enableAccessibleMode and exitSignal and showExitLabels
+    exitLbl = label.new(bar_index, close, "EXIT\n" + (closeExitSignal ? "SESSION CLOSE" : "VWAP REVERSION"), style=label.style_label_down, color=exitColor, textcolor=color.black, size=labelSize)
+    trackLabel(exitLbl)
+
+// Non-accessible fallback markers (kept so turning accessible mode off doesn't lose signal visibility entirely)
+plotshape(not enableAccessibleMode and longSignal, title="Long fade signal (plain)", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(not enableAccessibleMode and shortSignal, title="Short fade signal (plain)", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+plotshape(not enableAccessibleMode and exitSignal, title="Exit signal (plain)", style=shape.xcross, location=location.abovebar, color=color.gray, size=size.tiny)
+
+// ---------------------------------------------------------------------------
+// 8. UNBACKTESTED-DRAFT WARNING (always shown - this script has no live
+//    validation of any kind yet, unlike the timeframe-only warning ORB uses)
+// ---------------------------------------------------------------------------
+if barstate.islast
+    label.new(bar_index, high, "⚠ UNBACKTESTED DRAFT\nNot validated in Strategy Tester or Ghost dry-run yet.\nDo not wire this to a live alert.", style=label.style_label_down, color=warningColor, textcolor=color.black, size=labelSize)
+
+// ---------------------------------------------------------------------------
+// 9. DASHBOARD (new - always reflects current state, not historical)
+// ---------------------------------------------------------------------------
+posMap(p) =>
+    p == "Top Right" ? position.top_right : p == "Top Left" ? position.top_left : p == "Bottom Right" ? position.bottom_right : position.bottom_left
+
+var table dash = table.new(posMap(dashPosition), 2, 8, border_width=1)
+
+addRow(rowIdx, lbl, val, valColor) =>
+    table.cell(dash, 0, rowIdx, lbl, text_color=color.white, text_size=size.normal, bgcolor=#1B2230)
+    table.cell(dash, 1, rowIdx, val, text_color=valColor, text_size=size.normal, bgcolor=#1B2230)
+
+if enableAccessibleMode and showDashboard and barstate.islast
+    row = 0
+    addRow(row, "SESSION", sessionStateText(), color.white)
+    row += 1
+    addRow(row, "SIGNAL", signalStateText(), inPosition ? (posSide == "long" ? longColor : shortColor) : color.white)
+    row += 1
+    addRow(row, "VWAP", haveBands ? str.tostring(vwap, format.mintick) : "—", vwapColor)
+    row += 1
+    addRow(row, "ENTRY BANDS", haveBands ? str.tostring(lowerEntry, format.mintick) + " / " + str.tostring(upperEntry, format.mintick) : "—", color.white)
+    row += 1
+    addRow(row, "ENTRY", inPosition ? str.tostring(entryPrice, format.mintick) : "—", inPosition ? (posSide == "long" ? longColor : shortColor) : color.white)
+    row += 1
+    addRow(row, "STOP", inPosition ? str.tostring(stopPrice, format.mintick) : "—", stopColor)
+    row += 1
+    addRow(row, "TRADES TODAY", str.tostring(tradesToday) + " / " + str.tostring(maxTradesPerDay), color.white)
+    row += 1
+    addRow(row, "STATUS", "UNBACKTESTED DRAFT", warningColor)

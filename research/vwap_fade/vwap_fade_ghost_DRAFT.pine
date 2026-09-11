@@ -1,0 +1,197 @@
+//@version=5
+indicator("QuantC VWAP Fade - DRAFT, NOT LIVE", overlay=true, max_lines_count=50)
+
+// ============================================================================
+// DRAFT ONLY - this file is not wired to any TradingView alert or Ghost
+// ticker. It is a first-draft proposal for review, kept separate from the
+// live ORB scripts in research/orb_breakout/ so nothing there is touched.
+// Do not create a TradingView alert from this script, and do not point a
+// Ghost webhook at it, until it has been backtested (TradingView Strategy
+// Tester), run in Ghost dry-run ("test":true, the default below) for a
+// stretch, and you've given explicit go-ahead to go live - same gate the
+// validated MNQ ORB script went through.
+//
+// UNBACKTESTED. Every number below (RSI 30/70, 2 SD entry / 3 SD stop,
+// 30-bar warm-up, 3 trades/day cap) is a reasonable industry-standard
+// starting point, NOT a measured result the way the ORB scripts' numbers
+// are (those cite specific research files and pass rates). Treat every
+// input here as a hypothesis to test, not a validated setting.
+//
+// WHY THIS STRATEGY EXISTS: the account's only live edge (ORB breakout) is
+// a momentum strategy - it does well on trending days and tends to whipsaw
+// on choppy/range-bound days. Running that same ORB logic on a second,
+// correlated ticker (MNQ and MES both track major US indices and move
+// together) is the same directional bet twice, not diversification. A
+// mean-reversion fade is a genuinely different edge type: it tends to do
+// well on exactly the choppy days that hurt ORB, which is diversification
+// by market regime rather than by symbol.
+//
+// LOGIC:
+//   1. Track a session-anchored VWAP (resets at 09:30 ET each day) and its
+//      standard deviation, computed the same way TradingView's own VWAP
+//      indicator computes bands (running price/price^2/volume sums, not a
+//      simple moving stdev).
+//   2. Wait for `warmupBars` bars of the session before considering any
+//      signal, so the VWAP/stdev estimate isn't noisy off a handful of bars.
+//   3. Fade back toward VWAP when price closes more than `entryBandMult`
+//      standard deviations away from it AND RSI confirms the extreme AND
+//      volume is fading (a rough "the move is running out of steam" filter)
+//      - long when price is far below VWAP and oversold, short when far
+//      above and overbought.
+//   4. Stop-loss is sent to Ghost with the entry (`sl` field, an absolute
+//      price), set at a wider `stopBandMult` standard deviations from VWAP -
+//      always further out than the entry trigger, giving the trade room.
+//   5. Take-profit is NOT a fixed price sent at entry, because VWAP moves
+//      every bar - a stale target would drift from the real one. Instead
+//      the script watches every bar and sends an explicit exit alert the
+//      moment price crosses back through the current VWAP.
+//   6. Forced flat at the session's last bar, same safety net as the ORB
+//      scripts.
+//   7. `maxTradesPerDay` caps how many times this can fire in one session.
+//      Unlike ORB (hard-capped at one trade/day by design), a fade can
+//      legitimately re-trigger several times intraday - this cap exists so
+//      a choppy, repeatedly-triggering day can't run up losses that eat
+//      into the shared $1,800 daily / $3,000 total account-wide caps.
+//
+// LUCID / GHOST SAFETY NOTES (checked 2026-09-02, see project memory):
+//   - Lucid's hedging rule (support.lucidtrading.com, prohibited-hedging
+//     article) only restricts hedging ACROSS SEPARATE ACCOUNTS. Trading a
+//     different instrument in a different direction than another live
+//     strategy, in the SAME account, is explicitly allowed - so running
+//     this alongside the ORB alert is not a hedging violation.
+//   - Ghost's own webhook reference (quantcrawler.com/guides/ghost-webhook-
+//     json, checked 2026-09-02) confirms Ghost independently refuses to let
+//     you hold both directions on one ticker: "Opposite direction while in
+//     a position: Ghost closes the current position first, then opens the
+//     new one. If the close fails it refuses to open the new side." That's
+//     a second backstop, at the platform level, on top of the account rule.
+//   - Short entries use `{"action":"sell","price":...}` (verified against
+//     the same Ghost reference page - "sell" is the documented action for a
+//     market entry short, aliases "short"/"enter_short").
+//
+// STILL OPEN, not resolved before this should go live:
+//   - No backtest has been run yet. Do that in TradingView's free Strategy
+//     Tester before ever creating a live alert.
+//   - Needs its own Ghost ticker slot (not MNQ's or MES's existing cards),
+//     with "Use Stop Loss and Take Profit" AND "Use Webhook SL/TP" both
+//     turned on for the `sl` field to take effect - same two toggles the
+//     MES v2 draft's notes flagged.
+//   - Which instrument to actually run this on (MES, MNQ, or something
+//     else) hasn't been decided - the logic here is instrument-agnostic.
+// ============================================================================
+
+qty             = input.int(1, "Contracts per signal", minval=1, maxval=1, tooltip="Fixed at 1 micro contract, matching the sizing convention used on MNQ/MES.")
+testMode        = input.bool(true, "Test mode (Ghost dry-run, no real orders)", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
+enableShort     = input.bool(true, "Allow short (fade down) entries", tooltip="Turn off to run long-fade only.")
+rsiLength       = input.int(14, "RSI length", minval=1)
+oversoldLevel   = input.int(30, "RSI oversold level (long entry)", minval=1, maxval=100)
+overboughtLevel = input.int(70, "RSI overbought level (short entry)", minval=1, maxval=100)
+entryBandMult   = input.float(2.0, "Entry trigger - standard deviations from VWAP", minval=0.5)
+stopBandMult    = input.float(3.0, "Stop-loss - standard deviations from VWAP", minval=0.5, tooltip="Must be wider than the entry trigger multiple above.")
+volAvgLength    = input.int(5, "Volume-exhaustion average length (bars)", minval=1)
+warmupBars      = input.int(30, "Warm-up bars before signals are allowed", minval=5, tooltip="Bars since session open before the VWAP/stdev estimate is trusted.")
+maxTradesPerDay = input.int(3, "Max trades per day", minval=1)
+entryCutoffMins = input.int(15, "Stop new entries this many minutes before session close", minval=0, maxval=60, tooltip="2026-09-02 tweak: several backtest losses were entries fired right before the 4pm flatten, with no time to revert. This blocks NEW entries in the final N minutes of the session - it does not affect exits or the session-close flatten.")
+
+var float cumPV        = na
+var float cumPV2       = na
+var float cumVol       = na
+var int   barsInSession = 0
+var int   tradesToday   = 0
+var bool  inPosition    = false
+var string posSide      = na
+var float entryPrice    = na
+var float stopPrice     = na
+
+fullSession    = not na(time(timeframe.period, "0930-1600", "America/New_York"))
+sessionLastBar = not na(time(timeframe.period, "1559-1600", "America/New_York"))
+sessionStart   = fullSession and not fullSession[1]
+
+if sessionStart
+    cumPV         := 0.0
+    cumPV2        := 0.0
+    cumVol        := 0.0
+    barsInSession := 0
+    tradesToday   := 0
+
+if fullSession
+    typicalPrice   = hlc3
+    cumPV          += typicalPrice * volume
+    cumPV2         += typicalPrice * typicalPrice * volume
+    cumVol         += volume
+    barsInSession  += 1
+
+vwap      = cumVol > 0 ? cumPV / cumVol : na
+variance  = cumVol > 0 ? math.max(cumPV2 / cumVol - vwap * vwap, 0) : na
+stdevBand = not na(variance) ? math.sqrt(variance) : na
+
+warmupDone = barsInSession >= warmupBars
+haveBands  = warmupDone and not na(stdevBand) and stdevBand > 0
+
+upperEntry = haveBands ? vwap + entryBandMult * stdevBand : na
+lowerEntry = haveBands ? vwap - entryBandMult * stdevBand : na
+upperStop  = haveBands ? vwap + stopBandMult * stdevBand : na
+lowerStop  = haveBands ? vwap - stopBandMult * stdevBand : na
+
+rsi           = ta.rsi(close, rsiLength)
+volAvg        = ta.sma(volume, volAvgLength)
+volExhaustion = volume < volAvg
+
+etHour        = hour(time, "America/New_York")
+etMinute      = minute(time, "America/New_York")
+minsToClose   = (16 * 60) - (etHour * 60 + etMinute)
+withinCutoff  = fullSession and minsToClose <= entryCutoffMins
+
+canEnter = fullSession and haveBands and not inPosition and tradesToday < maxTradesPerDay and not withinCutoff
+
+longSignal  = canEnter and close < lowerEntry and rsi < oversoldLevel and volExhaustion
+shortSignal = canEnter and enableShort and close > upperEntry and rsi > overboughtLevel and volExhaustion
+
+reversionExitLong  = inPosition and posSide == "long"  and close >= vwap
+reversionExitShort = inPosition and posSide == "short" and close <= vwap
+closeExitSignal    = sessionLastBar and inPosition
+exitSignal         = reversionExitLong or reversionExitShort or closeExitSignal
+
+tsIso() =>
+    str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+if longSignal
+    inPosition  := true
+    posSide     := "long"
+    entryPrice  := close
+    stopPrice   := lowerStop
+    tradesToday += 1
+    msg = '{"action":"buy","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
+          ',"sl":' + str.tostring(stopPrice) +
+          ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+if shortSignal
+    inPosition  := true
+    posSide     := "short"
+    entryPrice  := close
+    stopPrice   := upperStop
+    tradesToday += 1
+    msg = '{"action":"sell","price":' + str.tostring(close) + ',"qty":' + str.tostring(qty) +
+          ',"sl":' + str.tostring(stopPrice) +
+          ',"time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+if exitSignal
+    reason = closeExitSignal ? "session_close" : "vwap_reversion"
+    inPosition := false
+    posSide    := na
+    msg = '{"action":"exit","reason":"' + reason + '","time":"' + tsIso() + '"' + (testMode ? ',"test":true' : '') + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+plot(haveBands ? vwap : na, title="Session VWAP", color=color.new(color.yellow, 0), style=plot.style_line, linewidth=2)
+plot(haveBands ? upperEntry : na, title="Upper entry band", color=color.new(color.red, 30), style=plot.style_line, linewidth=1)
+plot(haveBands ? lowerEntry : na, title="Lower entry band", color=color.new(color.green, 30), style=plot.style_line, linewidth=1)
+plot(inPosition and posSide == "long"  ? stopPrice : na, title="Stop-loss level (long)",  color=color.new(color.orange, 0), style=plot.style_circles, linewidth=1)
+plot(inPosition and posSide == "short" ? stopPrice : na, title="Stop-loss level (short)", color=color.new(color.orange, 0), style=plot.style_circles, linewidth=1)
+plotshape(longSignal, title="Long fade signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(shortSignal, title="Short fade signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+plotshape(exitSignal, title="Exit signal", style=shape.xcross, location=location.abovebar, color=color.gray, size=size.tiny)
+
+if barstate.islast and timeframe.period != "1"
+    label.new(bar_index, high, "UNBACKTESTED DRAFT - not validated on any timeframe yet.\nCurrently running on: " + timeframe.period, style=label.style_label_down, color=color.red, textcolor=color.white)

@@ -308,6 +308,137 @@ sweep — `grep` finds no contract-count loop and none of those figures in any
 in this section. **Re-run and commit the sweep script before any future decision
 leans on them**; they are not independently reproducible as things stand.
 
+## 2.10. Venture economics: will this PAY? (MEASURED + VERIFIED, 2026-09-11)
+
+Run: `venture_economics.py`. Every prior section in this file optimises one
+question — *will this account PASS*. None has ever asked *will this venture
+PAY*. They are different questions and a configuration can win the first while
+losing the second. This section closes that hole.
+
+### The mechanism that is actually deployed, priced exactly
+
+Measured on the same 5-year 1-minute dataset every other section uses, with the
+**live** parameters read out of `orb_long_ghost_DRAFT_mes_v2_accessible.pine`
+(MES, 1 contract, 125pt stop = $625/contract, 90-min underwater time exit),
+net of real Tradovate free-tier costs and 1 tick of adverse slippage on every
+exit — 662 trades, 2021-08-19 to 2026-08-14:
+
+| | MEASURED |
+|---|---|
+| Win rate | **44.4%** |
+| Average winner | +$133.21 |
+| Average loser | −$90.06 |
+| Reward : risk | 1.48 : 1 |
+| **Expectancy per trade** | **+$9.10** |
+| Worst single trade | −$626.83 |
+| Best single trade | +$789.42 |
+| Longest losing run (actual historical order) | 9 trades |
+| Trade frequency | 132.8 / year |
+
+**The 57.2% win rate quoted in §2.5 is not this mechanism.** That figure
+belongs to the retired no-stop, NQ+ES-pooled series and has been carried
+around this project as though it described what runs. It does not. The
+deployed mechanism wins **less than half** its trades and makes its money on
+a 1.48:1 payoff. Both facts are fine on their own; what matters is what they
+imply together, below.
+
+The +$9.10 figure independently reproduces the number recorded on 2026-09-10,
+from source, by a committed script — it is no longer prose-only.
+
+### Margin of safety — the number that decides everything
+
+At 1.48:1, the **break-even win rate is 40.3%**. The measured win rate is
+**44.4%**. The entire edge is a **+4.1 percentage point** margin.
+
+Read plainly: lose four points of win rate to real-world execution — worse
+fills than modelled, Ghost latency, one missed or mis-routed alert per
+twenty-five trades — and the edge is *gone*, not reduced. This is a thin,
+real edge, not a comfortable one. It is also the strongest argument on record
+for why the live-vs-backtest reconciliation discipline in the `lucid-review`
+skill is not optional bookkeeping: a 4-point gap is inside the range that
+sloppy execution can open on its own, and it would not be visible as a
+dramatic failure — just as an edge that quietly never shows up.
+
+### Time to target, and what it costs to wait
+
+At +$9.10 × 132.8 trades/year the mechanism generates **$1,208/year** of gross
+raw material. Against the $6,083 still needed (recorded 2026-09-10 — CONFIRM
+against the live dashboard before leaning on it), that is **669 trades, ~5.0
+years on the mean path**. `ruin.py`'s 77% pass / ~3.7yr median is the
+variance-aware, conditional-on-passing figure; both are correct and they
+answer different questions.
+
+### The fee structure — VERIFIED, and it corrects an assumption
+
+Read live from lucidtrading.com's own pricing table and FAQ on 2026-09-11
+(not a third-party tracker):
+
+| | VERIFIED |
+|---|---|
+| LucidPro 100K EVAL | **one-time $307** ($225.40 w/ coupon `VAULT`) |
+| Reset fee | $225 |
+| Account activation fee | **FREE** |
+| Recurring / monthly | **$0 — none** |
+| Funded split | 90/10 to trader |
+| Payout target | $750 / cycle |
+
+Lucid's FAQ, verbatim: *"Do I have to pay monthly for my accounts? No. All of
+our accounts are a one-time fee, we do not have monthly subscriptions for
+trading accounts."*
+
+**This corrects a concern raised earlier the same day** — that a multi-year
+grind would bleed subscription fees until the attempt was underwater. It does
+not. The cost of the attempt is **sunk and bounded at ~$225–307, already
+paid**, and holding the evaluation open costs nothing. Time spent grinding is
+not money bleeding. What is actually at risk over those years is attention and
+opportunity cost, not fees — a materially different, and much more favourable,
+decision than a recurring-fee model would present.
+
+### What it pays if it works
+
+Once funded, at this same size and frequency: $1,208/year gross → **$1,087/year**
+at the 90/10 split → **1.6 payout cycles per year** against the $750/cycle
+target.
+
+### The binding constraint (the actual finding)
+
+Expectancy is +$9.10 per trade and the mechanism fires ~133 times a year.
+**No sizing choice changes that.** Raising contracts multiplies the $9.10 and
+the $625 of risk in exact lockstep — it slides along the already-measured
+77/52/43/39 curve without ever improving the ratio, which is precisely why
+the 2026-09-11 decision to stay at 1 contract was correct and why revisiting
+it would not help.
+
+Only two levers raise return *without* paying for it in pass-probability:
+
+- **(a) more trades per year that are genuinely uncorrelated with this one.**
+  §2.8 already ruled MNQ out for this purpose at r = 0.963 — that is the same
+  bet twice, not diversification. An uncorrelated *mechanism* was the open
+  candidate — **MEASURED 2026-09-11, see
+  [research/vwap_fade/RESULTS.md](../vwap_fade/RESULTS.md)**. Split decision:
+  the VWAP-fade draft is genuinely independent of ORB (**r = −0.161**, 2.6%
+  shared variance, 521 trading days ORB never sees — against MNQ's +0.963),
+  which **confirms this slot is real and fillable**. But the draft rule itself
+  loses money (−$4.04/trade, 78.6% stopped out, negative in-sample on its own
+  hand-picked parameters) and is rejected. **The slot stays open; this
+  candidate does not fill it.** Because r is slightly negative the bar is
+  unusually low — a fade would be worth adding at merely break-even. Any
+  successor must be pre-registered with an out-of-sample split before the data
+  is re-inspected.
+- **(b) higher expectancy per trade at the same risk.** `mes_takeprofit_sweep.py`
+  and the untested NQ application of §2.7's mechanism both sit here.
+
+Everything else is a speed-versus-certainty trade, not an improvement.
+
+**NOT MEASURED here:** this section deliberately does not model the trailing
+drawdown — it is arithmetic about money, not a pass-probability; `ruin.py`
+owns that. The funded-phase figures assume the eval mechanism carries over
+unchanged, but the funded stage has a different daily loss limit (60% of peak
+EOD balance) and the 40% consistency rule, and **no test in this project has
+ever simulated the funded stage.** Trade frequency assumes the alert is
+running — it was paused 2026-09-11, and a paused alert trades zero times a
+year.
+
 ## 3. NOT MEASURED / still open
 
 - **A real hard stop-loss** — tested 2026-08-20, see
