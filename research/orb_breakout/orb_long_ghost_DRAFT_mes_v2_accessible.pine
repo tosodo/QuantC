@@ -25,20 +25,34 @@ indicator("QuantC ORB Long MES v2 (validated) - Ghost (Accessible)", overlay=tru
 // intentionally still a dormant draft, sitting unused on the "QuantC -
 // Drafts & Testing" chart, and correctly keeps its "DRAFT, NOT LIVE" name
 // and testMode=true default.
+//
+// SIZING DECISION 2026-09-11: STAY AT 1 CONTRACT. This file once again matches
+// the copy running on TradingView and is safe to paste over it.
+//   - Contracts per signal is back to 1 and HARD-LOCKED at maxval=1, so the
+//     input panel on a live chart cannot be nudged. Raising size requires a
+//     deliberate source edit.
+//   - The per-CONTRACT risk-cap fix is KEPT. It is a bug fix (see the sibling
+//     file's header, item 2) and is a no-op at 1 contract: 625 / 5 = the same
+//     125pt stop the live copy already runs. Its value is that the stop can no
+//     longer silently halve if size is ever raised.
+// Going to 2 contracts was measured and deliberately NOT taken: it doubles real
+// risk per trade ($625 -> $1,250) and moves the account from a 77% chance of
+// passing in ~3.7 years to 52% in ~1.2 years - buying speed by selling
+// certainty. Revisit on a quiet day, not into a CPI/FOMC week.
 // ============================================================================
 
 // ---------------------------------------------------------------------------
 // 1. INPUTS (original, unchanged)
 // ---------------------------------------------------------------------------
-qty            = input.int(1, "Contracts per signal", minval=1, maxval=1, group="Strategy", tooltip="Fixed at 1 MES micro contract - dynamic ATR-based sizing was tested and rejected (see the closed hypothesis note).")
+qty            = input.int(1, "Contracts per signal", minval=1, maxval=1, group="Strategy", tooltip="LOCKED at 1 by decision 2026-09-11. Stop DISTANCE is unaffected by this value (see 'Max $ risk per CONTRACT'). Measured 2026-09-10 on the full 5-year history at 1 tick slippage, starting from the account's real state: 1/2/3/4 contracts = 77/52/43/39% chance of passing, with median time-if-passing ~3.7yr / 1.2yr / 7mo / 5mo. More size does NOT improve the odds - it buys speed by selling certainty. Hard-locked at 1 so a live chart cannot be nudged; raising it needs a deliberate edit to maxval in source. Per-trade dynamic ATR sizing is a separate idea that was tested and rejected.")
 testMode       = input.bool(false, "Test mode (Ghost dry-run, no real orders)", group="Strategy", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
-maxRiskDollars = input.float(625, "Max $ risk per trade (stop is derived from this)", minval=1, group="Strategy", tooltip="Stop distance = this / (qty x point value) - see orb_long_ghost_DRAFT_mes_v2.pine's header comment for the full sizing rationale and 5-year backtest result.")
+riskPerContract = input.float(625, "Max $ risk per CONTRACT (stop is derived from this)", minval=1, group="Strategy", tooltip="Per CONTRACT, not per trade: stop distance = this / point value, so changing 'Contracts per signal' scales total risk WITHOUT moving the stop. Total risk per trade = this x contracts. See orb_long_ghost_DRAFT_mes_v2.pine's header comment for the full sizing rationale and 5-year backtest result.")
 timeExitMin    = input.int(90, "Underwater time-exit, minutes after entry", minval=1, group="Strategy")
 
 enableFundedPhaseCap  = input.bool(false, "Funded phase: cap profit per trade (Lucid 40% consistency rule)", group="Strategy", tooltip="OFF during evaluation - see orb_long_ghost_DRAFT_mes_v2.pine's header comment. Turn ON once funded.")
 maxDailyProfitDollars = input.float(300, "Max profit per trade before force-exit (funded phase only)", minval=1, group="Strategy", tooltip="Only used when the toggle above is ON. Default $300 = 40% of the confirmed $750/cycle funded payout target.")
 
-stopPoints = maxRiskDollars / (qty * syminfo.pointvalue)
+stopPoints = riskPerContract / syminfo.pointvalue
 
 // ---------------------------------------------------------------------------
 // 2. ACCESSIBILITY SETTINGS (new - presentation only, no effect on alerts)

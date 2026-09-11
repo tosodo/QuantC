@@ -33,9 +33,9 @@ indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE", overlay=true, max_lines_co
 //      measured choice at the time; re-test before assuming the same
 //      ranking still holds post-M1.
 //   2. A broker-side stop-loss is sent with the entry alert (`sl` field).
-//      Stop distance is DERIVED from a dollar-risk cap (`maxRiskDollars`),
-//      not a fixed point constant: stop = maxRiskDollars /
-//      (qty x syminfo.pointvalue). This mechanism was added 2026-09-03
+//      Stop distance is DERIVED from a per-contract dollar-risk cap
+//      (`riskPerContract`), not a fixed point constant: stop =
+//      riskPerContract / syminfo.pointvalue. This mechanism was added 2026-09-03
 //      after the original fixed 124.75-point 99th-percentile-MAE stop
 //      (wide_stop_test.py, $623.77 on 1 MES) was flagged as an oversized
 //      single-trade risk relative to this account's $1,800 daily limit.
@@ -55,13 +55,21 @@ indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE", overlay=true, max_lines_co
 //      determines eval survival is the $3,000 TOTAL trailing drawdown,
 //      and on that metric a stop wide enough to rarely fire (letting the
 //      time-exit do the real risk-cutting) beats a tighter one that fires
-//      often enough to double up with it. maxRiskDollars is now $625
+//      often enough to double up with it. riskPerContract is now $625
 //      (125.0 pts, ~ the original 124.75pt distance) - the daily-limit-
 //      percentage framing that motivated $270 was not the metric that
 //      predicted outcomes; measured 5-year survivability was. The dollar-
 //      cap MECHANISM is kept (still tied to account size, still a labeled
 //      input instead of a magic constant) even though the chosen distance
 //      now lands back near where research already said it should be.
+//      SCOPE CHANGE 2026-09-10: the cap is now per CONTRACT, not per trade.
+//      It was previously stop = maxRiskDollars / (qty x pointvalue), which
+//      silently HALVED the stop distance the moment qty rose above 1 - i.e.
+//      raising size would have recreated the exact too-tight-stop failure
+//      measured live on MNQ (5 of 5 trades stopped out inside 2 minutes on a
+//      10pt bracket no backtest ever approved). Per-contract makes stop
+//      DISTANCE invariant to qty, so contract count now scales dollar risk
+//      and expectancy together without disturbing the validated 125pt stop.
 //      VERIFIED against QuantCrawler's own Ghost Webhook JSON Reference
 //      (https://quantcrawler.com/guides/ghost-webhook-json, checked
 //      2026-08-21): `sl` is documented as an "Absolute stop price" (a
@@ -154,15 +162,15 @@ indicator("QuantC ORB Long MES v2 - DRAFT, NOT LIVE", overlay=true, max_lines_co
 // (medium) are all closed as of 2026-09-03 - see items above for what
 // changed, and this note for what didn't.
 
-qty            = input.int(1, "Contracts per signal", minval=1, maxval=1, tooltip="Fixed at 1 MES micro contract - dynamic ATR-based sizing was tested and rejected (see the closed hypothesis note).")
+qty            = input.int(1, "Contracts per signal", minval=1, maxval=1, tooltip="LOCKED at 1 by decision 2026-09-11. Stop DISTANCE is unaffected by this value (see 'Max $ risk per CONTRACT'). Measured 2026-09-10 on the full 5-year history at 1 tick slippage, starting from the account's real state: 1/2/3/4 contracts = 77/52/43/39% chance of passing, with median time-if-passing ~3.7yr / 1.2yr / 7mo / 5mo. More size does NOT improve the odds - it buys speed by selling certainty. Hard-locked at 1 so a live chart cannot be nudged; raising it needs a deliberate edit to maxval in source. Per-trade dynamic ATR sizing is a separate idea that was tested and rejected.")
 testMode       = input.bool(true, "Test mode (Ghost dry-run, no real orders)", tooltip="Adds \"test\":true to every alert. Turn OFF only when you are ready for signals to place real orders - that switch is yours to make deliberately.")
-maxRiskDollars = input.float(625, "Max $ risk per trade (stop is derived from this)", minval=1, tooltip="Stop distance = this / (qty x point value), so dollar risk per trade is fixed regardless of how wide MES moves that day. Default ($625, ~125 pts) was chosen after backtesting a tighter $270 cap on the full 5-year history and finding it measurably hurt survivability (mes_c1_stop_rerun.py) - this value lands back near the original 99th-percentile-MAE distance (124.75 pts) that research already validated. See the header comment for the full story.")
+riskPerContract = input.float(625, "Max $ risk per CONTRACT (stop is derived from this)", minval=1, tooltip="Per CONTRACT, not per trade: stop distance = this / point value, so changing 'Contracts per signal' scales total risk WITHOUT moving the stop. Total risk per trade = this x contracts. Default ($625, ~125 pts) was chosen after backtesting a tighter $270 cap on the full 5-year history and finding it measurably hurt survivability (mes_c1_stop_rerun.py) - this value lands back near the original 99th-percentile-MAE distance (124.75 pts) that research already validated. See the header comment for the full story.")
 timeExitMin    = input.int(90, "Underwater time-exit, minutes after entry", minval=1)
 
 enableFundedPhaseCap  = input.bool(false, "Funded phase: cap profit per trade (Lucid 40% consistency rule)", tooltip="OFF during evaluation - the eval has no consistency rule, so capping profit here would only give away progress toward the $6,000 target for no benefit (see the header comment). Turn ON once funded, where a single oversized day can breach the rule that no day may exceed 40% of the payout cycle's total profit.")
 maxDailyProfitDollars = input.float(300, "Max profit per trade before force-exit (funded phase only)", minval=1, tooltip="Only used when the toggle above is ON. Default $300 = 40% of the confirmed $750/cycle funded payout target - edit if your funded terms differ. Since this strategy trades at most once per day, capping per-trade profit is equivalent to capping daily profit.")
 
-stopPoints = maxRiskDollars / (qty * syminfo.pointvalue)
+stopPoints = riskPerContract / syminfo.pointvalue
 
 validSymbol    = syminfo.ticker == "MES1!" or syminfo.root == "MES"
 validTimeframe = timeframe.period == "1"

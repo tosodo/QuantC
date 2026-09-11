@@ -223,6 +223,91 @@ which is objectively better — see the note in §3 below — but operationally,
 both live accounts now run their respective best-tested draft rather than
 the plain no-stop mechanism.
 
+## 2.8. MNQ + MES on one account: diversification or the same bet twice? (MEASURED)
+
+Run: `mnq_mes_correlation.py` (2026-09-10). Closes the gap `mes_final_run.py`
+prints in its own NOT MEASURED block — "no test in this project has ever
+combined MNQ+MES trades into one shared account equity curve." Prompted by a
+live operational question: whether to run this same ORB-long mechanism on a
+second ticker against the one shared $3,000 drawdown budget.
+
+Deliberately **assumption-free**: identical entry rule on both instruments,
+measuring the raw hold-to-session-close percentage return. Percentage return
+makes the two price levels comparable; the raw close exit means **no stop
+distance had to be invented for NQ** (none has ever been validated there).
+
+| | Measured |
+|---|---|
+| ES ORB-long days / NQ ORB-long days | 662 / 651 |
+| Days both fired | 548 |
+| Of ES's signal days, NQ also fired | 82.8% |
+| Correlation of same-day returns (n=548) | **r = 0.963** |
+| Shared variance | **92.7%** |
+| Both won or both lost | **90.7%** (306 both-win, 191 both-lose) |
+| One won, one lost | 9.3% (51 days) |
+
+Volatility of an equal-weight blend versus one leg alone:
+
+| | sd of daily return |
+|---|---|
+| ES alone | 0.892% |
+| NQ alone | 1.129% |
+| 50/50 blend | **1.001%** (**+12.3%** vs ES alone) |
+| Same blend if the two were uncorrelated | −29.3% vs ES alone |
+
+Reading this plainly: **r = 0.963 is not "correlated," it is effectively the
+same instrument** — only ~7% of the movement is independent, and nine times in
+ten both legs share the same outcome on the same day. The blend is *more*
+volatile than MES alone, not less, because at this correlation there is nothing
+to offset and NQ is simply the choppier leg. The −29.3% figure is the
+diversification benefit that would have been available had the two been
+independent, and is not obtained. Adding MNQ alongside MES is therefore an
+increase in exposure, not a reduction in variance — the same trade-off as
+raising contract size, but taken on an instrument whose exit mechanism §2.7
+never tested.
+
+The one genuine point on the other side: 114 ES-only and 103 NQ-only days are
+real additional trade opportunities, and more trades does shorten time-to-target
+at a given size. That benefit is orthogonal to diversification and does not
+change the correlation finding.
+
+**NOT MEASURED here:**
+- This is the raw **entry signal's** co-movement, not the deployed mechanism's
+  dollar-P&L correlation. Measuring that needs a 99th-percentile MAE stop
+  distance for NQ, which has never been measured or validated.
+- No combined equity curve was simulated and **no combined survivability/ruin
+  number is produced**. This measures whether the two legs are the same bet —
+  not what running both would do to the pass rate.
+- Equal-weight blend. In contracts, 1 MNQ carries ~1.5x the notional of 1 MES
+  (~$58k vs ~$38k), so a 1-and-1 position would tilt further toward NQ's higher
+  volatility than the blend figure above shows.
+
+## 2.9. Contract sizing: decision to stay at 1 (2026-09-11)
+
+A sizing sweep dated 2026-09-10 is quoted in the MES v2 scripts' `qty` tooltip:
+on the full 5-year history at 1 tick slippage, starting from the account's real
+state, 1/2/3/4 contracts gave **77 / 52 / 43 / 39%** chance of passing, with
+median time-if-passing of ~3.7yr / 1.2yr / 7mo / 5mo. More size does not improve
+the odds — it buys speed by selling certainty.
+
+**Decision 2026-09-11: stay at 1 contract.** `qty` is back to 1 and hard-locked
+at `maxval=1` in both MES v2 files, so a live chart's input panel cannot be
+nudged. Raising size requires a deliberate source edit. The decision was taken
+on the morning of an 8:30am ET CPI print with FOMC five days later — doubling
+real per-trade risk ($625 → $1,250) into that was not a trade worth making.
+
+The **per-CONTRACT risk-cap fix is kept** and is a no-op at 1 contract
+($625 / $5 = the same validated 125pt stop). Its value is defensive: the old
+`stop = maxRiskDollars / (qty × pointvalue)` silently halved stop distance the
+moment `qty` rose above 1, which would have recreated the too-tight-stop failure
+measured live on MNQ.
+
+**NOT MEASURED / caveat:** no script in this repo reproduces the 77/52/43/39
+sweep — `grep` finds no contract-count loop and none of those figures in any
+`.py` here. The numbers currently exist only as prose in the script tooltip and
+in this section. **Re-run and commit the sweep script before any future decision
+leans on them**; they are not independently reproducible as things stand.
+
 ## 3. NOT MEASURED / still open
 
 - **A real hard stop-loss** — tested 2026-08-20, see
@@ -284,14 +369,27 @@ the plain no-stop mechanism.
   54.30% figure is the only number on record for it, and is likely
   optimistic for the same untested-slippage reason MES's originally was.
 
-  **Still not a go-live decision** — three gaps remain before either
+  ~~**Still not a go-live decision** — three gaps remain before either
   mechanism ships: (1) §2.7's combined mechanism has never been tested on
   MNQ or NQ/ES, only MES; (2) neither line reran the entry-predicts-direction
   significance test after the sizing correction — the original mixed/
   inconclusive out-of-sample result (NQ helps slightly, ES hurts slightly)
   still stands untouched; (3) nobody has committed to shipping *one*
   mechanism — the live script still runs no-stop, with two different
-  unreconciled stop-loss drafts sitting unused.
+  unreconciled stop-loss drafts sitting unused.~~
+
+  **Partly superseded 2026-09-10.** Gap (3) is closed: one mechanism was
+  committed to and is live. §2.7's combined price-stop + 90-min time exit runs
+  on MES via `orb_long_ghost_DRAFT_mes_v2_accessible.pine` (testMode off since
+  2026-09-09) on the real eval account. Verified end-to-end in Ghost the same
+  day: the ticker's "Use Webhook SL/TP" is ON (so the script's ~125pt `sl`
+  applies and the ticker card's "10 pts" is a *fallback* only), "No Take Profit
+  (Let Runners Run)" is ON (so the card's "20 pts" is excluded and the right
+  tail is uncapped, as the mechanism requires), and that day's trade exited via
+  `time_exit_90min` as designed. The no-stop mechanism is no longer what runs.
+  Gaps (1) and (2) remain open exactly as written — see §2.8 for what *was*
+  measured on the MNQ question (co-movement only; the mechanism itself still
+  has no MNQ test).
 
 ## Verdict (updated 2026-08-21 — supersedes the version below)
 
