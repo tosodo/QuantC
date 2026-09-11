@@ -1,0 +1,122 @@
+//@version=5
+strategy("QuantC ORB Long MES v2 - BACKTEST ONLY", overlay=true, initial_capital=100000,
+     default_qty_type=strategy.fixed, default_qty_value=1, pyramiding=0,
+     process_orders_on_close=true, calc_on_every_tick=false,
+     commission_type=strategy.commission.cash_per_contract, commission_value=0.85,
+     slippage=1, max_labels_count=500)
+
+// ============================================================================
+// BACKTEST-ONLY COPY of orb_long_ghost_DRAFT_mes_v2.pine, for TradingView's
+// Strategy Tester. This file sends NO alerts and is never wired to Ghost -
+// it exists only so the entry/exit logic (and the new dollar-capped stop
+// from C1) can actually be measured against history, per the QC report's
+// H1 finding: the DRAFT was an indicator() with zero strategy.* calls, so
+// none of its performance claims could be verified in-platform.
+//
+// Entry/exit CONDITIONS are copied verbatim from the DRAFT (same 09:45-16:00
+// full-session entry window, same dollar-capped stop via maxRiskDollars /
+// (qty x point value), same 90-minute underwater time-exit re-checked every
+// bar past the cutoff (M1 fix), same session-close flatten, same half-day
+// catch-all flatten (M3), same funded-phase profit cap toggle, same
+// MES-only / 1-minute-only hard gate from C2). The only difference is
+// mechanical: this version calls
+// strategy.entry()/strategy.exit()/strategy.close() so TradingView can
+// simulate fills, P&L, and drawdown, instead of calling alert() to notify
+// Ghost. It also reads strategy.opentrades.entry_price(0) / entry_time(0)
+// instead of manually tracked entryPrice/entryTime variables, since the
+// strategy engine's own position state is the more reliable source of
+// truth for a backtest (same reasoning already used in
+// vwap_fade_backtest_strategy.pine).
+//
+// RUN THIS ON MES1!, 1-minute timeframe - same hard gate as the DRAFT
+// (validSymbol/validTimeframe) blocks entries on the wrong chart here too,
+// so a mismatched chart will just show zero trades rather than garbage
+// numbers.
+//
+// COMMISSION / SLIPPAGE ASSUMPTIONS: $0.85 per contract per side and 1
+// tick, set in the strategy() line above - the same ballpark already used
+// in vwap_fade_backtest_strategy.pine (Pine Script requires these fixed on
+// this line, not in the Inputs tab). NOTE this is NOT the same cost model
+// as mes_final_run.py's own REAL_COST_POINTS figure for MES (0.1152 pts
+// round-turn = ~$0.576 total, i.e. ~$0.288/side) - that lower number is
+// what produced the 77.8%/71.6%/64.29% pass-rate figures quoted in the
+// DRAFT's header comment. Expect this Strategy Tester run to show a
+// somewhat worse result than those figures for cost-model reasons alone.
+// Edit commission_value/slippage above to match REAL_COST_POINTS exactly
+// for a true apples-to-apples comparison against the Python figures.
+// ============================================================================
+
+qty            = input.int(1, "Contracts per signal", minval=1, maxval=1)
+maxRiskDollars = input.float(625, "Max $ risk per trade (stop is derived from this)", minval=1, tooltip="Same sizing as the live DRAFT: stop = this / (qty x point value). $625 (~125 pts) was chosen after a tighter $270 cap was backtested on the full 5-year history (mes_c1_stop_rerun.py) and found to measurably hurt survivability - see orb_long_ghost_DRAFT_mes_v2.pine's header comment for the full story.")
+timeExitMin    = input.int(90, "Underwater time-exit, minutes after entry", minval=1)
+
+enableFundedPhaseCap  = input.bool(false, "Funded phase: cap profit per trade (Lucid 40% consistency rule)", tooltip="OFF during evaluation - see orb_long_ghost_DRAFT_mes_v2.pine's header comment. Turn ON to backtest the funded-phase behavior.")
+maxDailyProfitDollars = input.float(300, "Max profit per trade before force-exit (funded phase only)", minval=1)
+
+stopPoints = maxRiskDollars / (qty * syminfo.pointvalue)
+
+validSymbol    = syminfo.ticker == "MES1!" or syminfo.root == "MES"
+validTimeframe = timeframe.period == "1"
+
+if barstate.islast and not validSymbol
+    label.new(bar_index, high, "BACKTEST ONLY - validated for MES only.\nCurrent chart: " + syminfo.ticker, style=label.style_label_down, color=color.red, textcolor=color.white)
+
+var float rangeHigh       = na
+var float rangeLow        = na
+var int   rangeBarCount   = 0
+var bool  tradedToday     = false
+
+rangeWin        = not na(time(timeframe.period, "0930-0945", "America/New_York"))
+fullSession     = not na(time(timeframe.period, "0945-1600", "America/New_York"))
+sessionLastBar  = not na(time(timeframe.period, "1559-1600", "America/New_York"))
+rangeWinStart   = rangeWin and not rangeWin[1]
+
+if rangeWinStart
+    rangeHigh       := high
+    rangeLow        := low
+    rangeBarCount   := 1
+    tradedToday     := false
+else if rangeWin
+    rangeHigh       := math.max(rangeHigh, high)
+    rangeLow        := math.min(rangeLow, low)
+    rangeBarCount   += 1
+
+rangeComplete = rangeBarCount >= 15
+longSignal    = fullSession and not tradedToday and rangeComplete and close > rangeHigh and validSymbol and validTimeframe and strategy.position_size == 0
+
+inPosition = strategy.position_size > 0
+entryPrice = inPosition ? strategy.opentrades.entry_price(0) : na
+entryTime  = inPosition ? strategy.opentrades.entry_time(0) : na
+
+minutesSinceEntry = inPosition ? (time - entryTime) / 60000 : na
+pastTimeExitCutoff = inPosition and fullSession and minutesSinceEntry >= timeExitMin
+timeExitTriggered = pastTimeExitCutoff and close <= entryPrice   // re-checked every bar past the cutoff (M1 fix)
+unrealizedProfitDollars = inPosition ? (close - entryPrice) * qty * syminfo.pointvalue : na
+profitCapTriggered = enableFundedPhaseCap and inPosition and unrealizedProfitDollars >= maxDailyProfitDollars
+closeExitSignal   = sessionLastBar and inPosition
+catchAllFlatten   = inPosition and not fullSession   // half-day / early-close backstop
+
+if longSignal
+    tradedToday     := true
+    stopPrice = close - stopPoints
+    strategy.entry("Long", strategy.long, qty=qty)
+    strategy.exit("Long Stop", from_entry="Long", stop=stopPrice, comment="stop")
+
+if profitCapTriggered
+    strategy.close("Long", comment="funded_profit_cap")
+
+if timeExitTriggered
+    strategy.close("Long", comment="time_exit_90min")
+
+if closeExitSignal
+    strategy.close("Long", comment="session_close")
+
+if catchAllFlatten
+    strategy.close("Long", comment="catch_all_flatten")
+
+plot(rangeComplete and fullSession ? rangeHigh : na, title="Opening range high", color=color.new(color.green, 0), style=plot.style_stepline, linewidth=1)
+plot(rangeComplete and fullSession ? rangeLow  : na, title="Opening range low",  color=color.new(color.red, 0),   style=plot.style_stepline, linewidth=1)
+plotshape(longSignal, title="Long signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+
+if barstate.islast and not validTimeframe
+    label.new(bar_index, high, "BACKTEST ONLY - run on the 1-minute chart.\nCurrently running on: " + timeframe.period, style=label.style_label_down, color=color.red, textcolor=color.white)
