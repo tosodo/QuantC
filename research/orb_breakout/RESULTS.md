@@ -302,11 +302,15 @@ The **per-CONTRACT risk-cap fix is kept** and is a no-op at 1 contract
 moment `qty` rose above 1, which would have recreated the too-tight-stop failure
 measured live on MNQ.
 
-**NOT MEASURED / caveat:** no script in this repo reproduces the 77/52/43/39
+~~**NOT MEASURED / caveat:** no script in this repo reproduces the 77/52/43/39
 sweep — `grep` finds no contract-count loop and none of those figures in any
 `.py` here. The numbers currently exist only as prose in the script tooltip and
 in this section. **Re-run and commit the sweep script before any future decision
-leans on them**; they are not independently reproducible as things stand.
+leans on them**; they are not independently reproducible as things stand.~~
+**RESOLVED 2026-09-18 — see section 2.11.** `lucid_barrier_model.py` reproduces
+this sweep from a committed script for the first time (77.11/52.94/44.37/39.95%,
+matching the prose almost exactly) and additionally models the account's real
+drawdown lock, which the original sweep's method did not.
 
 ## 2.10. Venture economics: will this PAY? (MEASURED + VERIFIED, 2026-09-11)
 
@@ -438,6 +442,119 @@ EOD balance) and the 40% consistency rule, and **no test in this project has
 ever simulated the funded stage.** Trade frequency assumes the alert is
 running — it was paused 2026-09-11, and a paused alert trades zero times a
 year.
+
+## 2.11. The Lucid barrier model: how much of survivability is geometry vs edge? (MEASURED, 2026-09-18)
+
+Run: `lucid_barrier_model.py`. Prompted by an external source — Villahermosa
+(2026), *"Prop-Firm Challenges: A Barrier Model of Pass Rates and Expected
+Value"* (SSRN 7445798) — which models challenge products as a barrier-crossing
+problem and derives a closed-form ceiling on pass probability, independent of
+skill, for ANY prop-firm evaluation. Two questions this project had never
+asked: (1) what does that ceiling say about *this* account specifically, and
+(2) does the paper's central finding — that pass probability is *non-monotonic*
+in position size for a skill-free participant, peaking at an interior size
+rather than falling steadily — change anything about the 2.9 sizing decision.
+
+**A methodology note, kept on the record per this project's own discipline:**
+the first version of this script's "zero-edge control" accidentally carried a
+small phantom edge (a one-time random win/loss sign assignment across the 662
+trades that happened to land at +$4.80/trade average by chance, then got
+reused on every resample instead of re-flipped). It was caught by validating
+the code against the paper's own worked example (a symmetric random walk
+should reproduce the closed-form ceiling under a fixed floor, and land
+*strictly below* it under a trailing floor) before any number below was
+trusted. Fixed by drawing a fresh 50/50 sign on every simulated trade instead
+of fixing the signs once. Recorded here, not silently corrected, per this
+project's "never invent a number" standard.
+
+### The ceiling, and what a zero-edge trader actually gets on Lucid's exact rules
+
+Lucid's own numbers (VERIFIED, HYPOTHESIS.md / RESULTS.md 2): loss limit
+$3,000, profit target $6,000, trailing drawdown that **locks permanently at
+$100,100 once the account's peak balance clears $103,100** (this lock has
+never been modelled anywhere in this project before — `ruin.py`'s
+`--dd-basis trailing` trails the peak forever).
+
+| | Value |
+|---|---|
+| Theoretical ceiling, L/(T+L) | **33.3%** (Lucid's 2:1 target:loss ratio is steeper than the paper's own studied product's 1.25:1, whose ceiling was 44.4% — Lucid caps lower before any friction) |
+| Zero-edge control, 1 contract, WITH the real lock | **19.41%** |
+| Zero-edge control, 1 contract, WITHOUT the lock (old `ruin.py` assumption) | 14.88% |
+
+Both control figures sit **below** the 33.3% ceiling, as the paper's own math
+requires (real commissions/slippage and the trailing-floor mechanic eat the
+rest) — this is the check that caught the bug above, and the fixed version
+passes it. Read plainly: **a perfectly disciplined trader with zero real edge
+would pass this specific evaluation roughly 1 time in 5**, not 1 time in 3.
+
+### The live mechanism, reproduced and extended
+
+The 77/52/43/39% figures quoted since 2026-09-10 (§2.9) existed only as prose
+— no committed script reproduced them. They are reproduced here, and for the
+first time the real drawdown lock is included rather than assumed away:
+
+| Contracts | PASS, lock modelled (this run) | PASS, no lock (old assumption) | Lock is worth |
+|---|---|---|---|
+| 1 | **77.11%** | 69.02% | +8.09 pts |
+| 2 | **52.94%** | 44.08% | +8.86 pts |
+| 3 | **44.37%** | 36.23% | +8.14 pts |
+| 4 | **39.95%** | 33.38% | +6.57 pts |
+
+The reproduced figures (77.11/52.94/44.37/39.95) match the 2026-09-10 prose
+(77/52/43/39) almost exactly, which is a strong independent validation of
+that earlier, previously-unreproducible sweep. The lock is worth a real and
+now-quantified **+6.6 to +8.9 percentage points** at every size — this
+precisely answers the "~8 points pessimistic" note carried in project memory
+since 2026-09-11, which had never been measured until now.
+
+### Does the paper's "peaks at an interior size" finding apply here? No.
+
+The paper's central claim is that pass probability is non-monotonic in
+position size — too large blows through the floor fast, too small pays a
+fixed per-trade friction cost repeatedly, so a skill-free participant's best
+odds sit at an interior sweet spot, not at the smallest size. Tested directly
+against Lucid's exact rules across 1–4 contracts:
+
+- Live mechanism (real edge): 77.11% → 52.94% → 44.37% → 39.95% —
+  **monotonically decreasing.**
+- Zero-edge control: 19.41% → 20.80% → 21.49% → 22.93% — mildly
+  **monotonically increasing** (consistent with the "bold play" principle the
+  paper itself cites — Dubins & Savage, 1965 — for a sub-fair game: fewer,
+  larger bets mean fewer chances for fixed per-trade friction to bite before
+  the barrier is reached; this is the zero-edge mirror image of why bigger
+  size does NOT help the live mechanism).
+
+**No hidden sizing lever found.** The 2026-09-11 decision to stay at 1
+contract is not just unchanged — it is now the best-tested conclusion in this
+file, having survived a second independent model built specifically to find
+a counterexample to it.
+
+### What was actually riding on the 4.1-point margin, quantified for the first time
+
+§2.10 already established the live mechanism's edge is a thin +4.1
+percentage-point margin over break-even win rate. This section shows what
+that margin is worth in practice: at 1 contract, the live mechanism passes
+77.11% of the time against a zero-edge trader's 19.41% on the **identical**
+rules — a 57.7-point gap produced entirely by that one thin margin compounding
+across hundreds of trades. The edge is not fragile in the sense of being
+small in its effect — it is fragile only in the sense that if real-world
+execution erodes the 4.1-point margin toward zero, survivability does not
+degrade gently; it collapses back toward the 19–23% zero-edge band. This is
+the sharpest number yet for why the `lucid-review` live-vs-backtest
+reconciliation discipline is load-bearing, not optional bookkeeping.
+
+**NOT MEASURED here:**
+- The funded-stage rules (60% of peak EOD daily-loss limit, 40% consistency
+  cap) are not modelled — this section, like `ruin.py` and §2.9/2.10 before
+  it, answers the EVALUATION pass question only.
+- The $1,800 Ghost-side daily limit is not modelled (confirmed soft, not
+  account-failing — RESULTS.md section 2).
+- The zero-edge control matches trade magnitude and real cost/slippage drag
+  exactly; only the win/loss sign is randomised per draw. It is not a
+  synthetic parametric distribution.
+- One simulated "tick" = one historical trade occurrence, matching this
+  project's existing `--trades-per-day 1` convention; non-trading days are a
+  no-op for both the peak and the floor either way.
 
 ## 3. NOT MEASURED / still open
 
