@@ -82,6 +82,23 @@ while it persists.
    of the `time` in its message. The DEMO MNQ alerts fire several times a
    day and give an earlier read.
 
+**Restart plan (as of 2026-09-25):**
+
+- Real-time CME data was renewed on 2026-09-25, mid-session. Not yet
+  confirmed live: no alert had fired since the renewal (the last DEMO fire
+  at 8:31 ET was still ~12 min late), and the alert stayed paused for the
+  rest of that session.
+- A Claude check-in is scheduled for **Mon 2026-09-28, 8:45 ET**. It reads
+  the alert log for the DEMO fires since Sunday's 6pm ET reopen:
+  - Lag ~1 min → restart 5571966155 and confirm `active=true`.
+  - Lag still ~10 min → leave it paused and report; don't trade on
+    delayed data.
+- **Manual step:** the expiry (2026-10-05) has to be extended by hand on
+  tradingview.com. The MCP can't edit alerts that have a webhook. The
+  check-in reminds you.
+- After the open, check the first MES alert's `fired_at` is within ~1 min
+  of its message `time`.
+
 ## What the script does (and deliberately does not do)
 
 File: [orb_long_ghost.pine](orb_long_ghost.pine)
