@@ -88,6 +88,12 @@ while it persists.
   confirmed live: no alert had fired since the renewal (the last DEMO fire
   at 8:31 ET was still ~12 min late), and the alert stayed paused for the
   rest of that session.
+- **After-close check, Fri 2026-09-25, 4:15 ET** (Claude check-in): reads
+  the alert log for every fire since the renewal (~9:50 ET), mainly the
+  3m DEMO alerts. It compares `fired_at` with the bar close (`bar_time` +
+  3 min): ~1 min means the data is live, ~10+ min means it's still
+  delayed. It also confirms 5571966155 is still paused and hasn't fired,
+  and reports what the result means for Monday.
 - A Claude check-in is scheduled for **Mon 2026-09-28, 8:45 ET**. It reads
   the alert log for the DEMO fires since Sunday's 6pm ET reopen:
   - Lag ~1 min → make sure 5571966155 is active (restart it if still
