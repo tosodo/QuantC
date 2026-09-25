@@ -90,12 +90,23 @@ while it persists.
   rest of that session.
 - A Claude check-in is scheduled for **Mon 2026-09-28, 8:45 ET**. It reads
   the alert log for the DEMO fires since Sunday's 6pm ET reopen:
-  - Lag ~1 min → restart 5571966155 and confirm `active=true`.
-  - Lag still ~10 min → leave it paused and report; don't trade on
-    delayed data.
-- **Manual step:** the expiry (2026-10-05) has to be extended by hand on
-  tradingview.com. The MCP can't edit alerts that have a webhook. The
-  check-in reminds you.
+  - Lag ~1 min → make sure 5571966155 is active (restart it if still
+    paused) and confirm `active=true`.
+  - Lag still ~10 min → make sure it is NOT active (stop it if the expiry
+    edit below switched it back on) and report; don't trade on delayed
+    data.
+  - Expiry still 2026-10-05 → remind the user.
+- **Manual step: extend the expiry to 2026-10-31.** The MCP can't edit
+  alerts that have a webhook, so do it on tradingview.com:
+  1. Alerts panel → "QuantC ORB Long MES v2 (validated) - Ghost
+     (Accessible)" → Edit.
+  2. Set Expiration to 31 Oct 2026. Leave the webhook URL and message
+     unchanged.
+  3. Save.
+
+  Do this **outside market hours** (after the 4pm ET close, or Fri 5pm to
+  Sun 6pm ET). Saving an edit can switch a paused alert back on, and the
+  script can take a late entry mid-session.
 - After the open, check the first MES alert's `fired_at` is within ~1 min
   of its message `time`.
 
