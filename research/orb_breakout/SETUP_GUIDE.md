@@ -15,6 +15,73 @@ not as a still-pending plan — read "recommend paper/sim first" and "not
 covered here" further down as the historical caution that was followed at
 the time, not the current state.
 
+**Correction (2026-09-25): the Lucid evaluation is simulated, not real
+money.** Lucid's daily snapshot email for LTE10089070250001 states it
+"reflects simulated performance for your LucidTest account". What's at risk
+is the evaluation fee (failing means re-buying it), not trading capital.
+Snapshot at the 2026-09-24 close: balance $100,099, total profit +$99,
+minimum balance $97,178 (so $2,921 of drawdown room), profit target
+$6,000, 9 days traded.
+
+## Current live state and open issue (2026-09-25) — read this first
+
+This supersedes the "Current live state (2026-08-28)" block in step 3 below.
+
+**Only one strategy was live, and it is now PAUSED.**
+
+| TradingView alert | Symbol | State |
+|---|---|---|
+| QuantC ORB Long MES v2 (validated) - Ghost (Accessible), id 5571966155 | MES1!, 1m | **Paused 2026-09-25 ~9:47 ET** (stopped, not deleted: settings and Ghost webhook kept). Expires 2026-10-05, extend on restart. |
+| QC Trend DEMO test BUY / SELL (dry run), ids 5662901850 / 5662914432 | MNQ1!, 3m | Active, but every message carries `"test":true`, so no orders reach the broker. |
+| QuantC ORB Long MNQ - OR-width stop DRAFT | MNQ1!, 1m | Inactive since 2026-08-28. **MNQ is not live**, whatever step 3 below says. |
+| QuantC ORB Long (validated) - Ghost alerts, MES and MNQ | 1m | Inactive (last fired 2026-08-28 / 2026-09-02). |
+
+**Why it was paused: every alert has fired ~10 minutes late since
+2026-09-21.** From TradingView's alert log (54 alerts, 26 Aug to 25 Sep):
+
+- Up to the 2026-09-18 close, every alert fired ~0-1 min after its signal
+  bar closed.
+- From the 2026-09-21 open on, every alert fires ~10 min after its signal
+  bar closes. It's a constant delay across both symbols (MES 1m and MNQ 3m)
+  and every script, and it started over the 19-20 Sep weekend.
+- The delay is inside TradingView, before the webhook. The v2 script
+  stamps each message with the signal bar's close time (`time_close`),
+  e.g. `"time":"...13:48:00Z"`, while the log shows it `fired_at` 13:58.
+  Ghost accepted every webhook immediately (HTTP 200).
+- Confirmed on the chart 2026-09-25: the MES1! 1m chart shows TradingView's
+  orange **"D" (delayed data)** badge, and the newest bar was ~10 min behind
+  the chart clock (e.g. clock 13:46:10 UTC, newest bar ~13:36).
+- Conclusion: the account's **real-time CME market data subscription
+  lapsed** around 19-20 Sep. TradingView serves CME data 10 min delayed
+  without it, and server-side alerts see the same delayed bars. No
+  TradingView billing email was found in the connected Gmail, so the exact
+  billing cause is unconfirmed.
+
+**What it cost.** 2026-09-24 trade: signal entry 7746.75 → signal exit
+7733.25 (−13.5pt, −$67.50 at signal prices). Lucid reported −$80 for the
+session, so the delay plus commissions cost roughly $10-20 on that trade.
+On 2026-09-21 the "session close" exit fired at 4:10pm ET, after the
+regular session. For scale: RESULTS.md §2.7 shows just 2 ticks of adverse
+exit slippage cuts evaluation survival from 77.8% to 64.3%. A 10-minute
+delay is far outside what was tested, so the tested pass rates don't apply
+while it persists.
+
+**To resume (in this order):**
+
+1. Renew TradingView real-time CME data: Profile → Settings and billing →
+   Market data subscriptions → CME Group, **non-professional** (~$7/month
+   as of Sep 2026; the professional rate is ~$548/month). Or click the
+   orange "D" badge on the chart.
+2. Reload the chart. Check the "D" badge is gone and the newest 1m bar
+   matches the chart clock.
+3. **Before 9:30 ET on a trading day** (never mid-session: the script can
+   take a late entry, e.g. 2026-09-18 entered at 3:49pm ET), restart alert
+   5571966155 (Alerts panel → Restart). Extend its expiry past 2026-10-05
+   while you're there.
+4. Check the fix with the first alert: `fired_at` should be within ~1 min
+   of the `time` in its message. The DEMO MNQ alerts fire several times a
+   day and give an earlier read.
+
 ## What the script does (and deliberately does not do)
 
 File: [orb_long_ghost.pine](orb_long_ghost.pine)
@@ -158,7 +225,9 @@ For **each** instrument (MNQ, MES) in your QuantCrawler Ghost dashboard:
    reads the per-trade `sl` value (the day's own opening-range low) the
    script sends, rather than a fixed distance.
 
-   **Current live state (2026-08-28)**:
+   **Current live state (2026-08-28)** *(outdated: see "Current live state
+   and open issue (2026-09-25)" at the top of this file; MNQ is no longer
+   live and MES v2 is paused)*:
    - **MNQ** (ticker "MNQ", account LTE10089070250001): now running the
      OR-width-stop draft — entry unchanged, stop = opposite side of the
      day's opening range, no take-profit, exit at session close otherwise.
