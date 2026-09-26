@@ -1,6 +1,6 @@
-date,gonogo,alert_active,status,range_high,range_low,down_break_first,entry,entry_time,exit,exit_time,exit_reason,signal_pnl,buy_lag_s,exit_lag_s,lucid_pnl,slippage,flags,notes
-2026-09-21,none,true,live,,,,7768.00,09:46,7833.00,16:00,session_close,325.00,600,600,,,late_fire,backfill 2026-09-26 - delayed data - exit sent 16:10 ET - range not recorded
-2026-09-22,none,true,no_breakout,7848.50,7835.50,,,,,,,,,,,,,backfill
-2026-09-23,none,true,no_breakout,7826.50,7814.25,,,,,,,,,,,,,backfill
-2026-09-24,none,true,live,7744.75,7730.00,false,7746.75,09:48,7733.25,11:18,time_exit_90min,-67.50,600,600,-80.00,-12.50,late_fire,backfill - delayed data
-2026-09-25,none,false,shadow,7790.75,7767.50,false,7791.25,09:55,7776.75,11:25,time_exit_90min,-72.50,,,,,,backfill - alert paused ~9:47 ET for delayed data
+date,gonogo,alert_active,status,range_high,range_low,down_break_first,entry,entry_time,exit,exit_time,exit_reason,signal_pnl,buy_lag_s,exit_lag_s,qty,lucid_pnl,slippage,flags,notes
+2026-09-21,none,true,live,,,,7768.00,09:46,7833.00,16:00,session_close,325.00,600,600,1,,,late_fire,backfill 2026-09-26 - delayed data - exit sent 16:10 ET - range not recorded
+2026-09-22,none,true,no_breakout,7848.50,7835.50,,,,,,,,,,,,,,backfill
+2026-09-23,none,true,no_breakout,7826.50,7814.25,,,,,,,,,,,,,,backfill
+2026-09-24,none,true,live,7744.75,7730.00,false,7746.75,09:48,7733.25,11:18,time_exit_90min,-67.50,600,600,1,-80.00,-12.50,late_fire,backfill - delayed data
+2026-09-25,none,false,shadow,7790.75,7767.50,false,7791.25,09:55,7776.75,11:25,time_exit_90min,-72.50,,,,,,,backfill - alert paused ~9:47 ET for delayed data

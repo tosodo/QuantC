@@ -16,10 +16,28 @@ market holiday), log `SKIP` and stop. Half-days are not skipped; see check 5.
 
 ## 1. Manual hold (the user's kill switch)
 
-If `research/orb_breakout/ops/HOLD` exists on `main`, the verdict is
+State files are read from the working branch, not `main` (see "Where the
+state lives" in `RISK_RULES.md`). Run `git pull origin
+claude/beautiful-cray-9vkxjd` first.
+
+If `research/orb_breakout/ops/HOLD` exists, the verdict is
 **NO-GO (hold)**, whatever the other checks say. The file's text says why.
 Only the user creates or removes it. Claude does that only when asked,
 e.g. "hold trading" / "release the hold".
+
+## 1b. Risk pause: must PASS (Phase 2, see `RISK_RULES.md`)
+
+Run `python3 research/orb_breakout/ops/risk_state.py`.
+
+- **On a Monday:** if `ops/RISK_PAUSE` exists and its only rule is
+  `R2_weekly_loss`, and R2 is no longer in `tripped`, delete it and commit.
+  The new week has started.
+- **FAIL (risk pause):** `ops/RISK_PAUSE` exists.
+- **FAIL (risk pause):** `tripped` is not empty, e.g. a Lucid P&L supplied
+  since the close pushed the buffer under the limit. Create or extend
+  `RISK_PAUSE` as `RISK_RULES.md` describes.
+- Report the rule and figures, and that the pause needs the user to say
+  "resume" (R2: that it clears next Monday).
 
 ## 2. Data latency: must PASS
 
@@ -67,18 +85,22 @@ days, and skipping them would be an untested filter. Changing that is a
 separate decision for the user. On a half-day the script's
 `catchAllFlatten` exits the trade at the early close.
 
-## 6. Account buffer: information only (until Phase 2)
+## 6. Account figures: reported
 
-Report the last known room above Lucid's minimum balance: $2,921 as of
-2026-09-25, plus the date of that figure. It becomes a gate once the
-Phase 2 risk rules are approved.
+From the `risk_state.py` output, report:
+- `buffer`: say "estimated" if `buffer_estimated`, and give its anchor
+  date.
+- `week_live_pnl`.
+- `consecutive_stops`.
+
+R3 (buffer) is gated in check 1b.
 
 ## Verdict and action
 
-- **GO** = checks 1–3 pass and check 4 is not FAIL. Make sure the live
+- **GO** = checks 1, 1b, 2 and 3 pass and check 4 is not FAIL. Make sure the live
   alert is active; restart it if it's paused. It's 8:45 ET, before the
   session, so a restart is safe. Confirm `active=true`.
-- **NO-GO** = any of checks 1–4 fails. Stop the live alert if it's active
+- **NO-GO** = any of checks 1, 1b, 2, 3 or 4 fails. Stop the live alert if it's active
   and confirm `active=false`.
 - **Never** restart or edit an alert after 9:30 ET. If this check runs late
   (after 9:30), treat GO as "leave as is" and report.
@@ -88,7 +110,9 @@ Phase 2 risk rules are approved.
 Append one line to `research/orb_breakout/ops/golive_log.csv`, commit and
 push to the working branch. It gets merged with the next PR.
 
-    date,verdict,median_lag_s,probe_fires,alert_id,alert_active_after,guard_version,expiry,events,notes
+    date,verdict,median_lag_s,probe_fires,alert_id,alert_active_after,guard_version,expiry,events,risk,notes
+
+(`risk` = `ok`, or the tripped rules, `;`-separated.)
 
 Then tell the user in 3–5 lines: the verdict, why, the action taken, and
 any WARN.
