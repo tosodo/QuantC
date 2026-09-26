@@ -44,7 +44,13 @@ def in_window(dt, start, end):
 
 def replay(bars, day):
     today = [b for b in bars if et(b["t"]).date().isoformat() == day]
-    today.sort(key=lambda b: b["t"])
+    return replay_day(today, day)
+
+
+def replay_day(today, day):
+    """today: that session's bars (any order). Also used by
+    ../live_rules_backtest.py over the full history."""
+    today = sorted(today, key=lambda b: b["t"])
     out = {"date": day, "bars": len(today)}
 
     rng = [b for b in today if in_window(et(b["t"]), time(9, 30), time(9, 45))]
@@ -97,9 +103,13 @@ def replay(bars, day):
     if exit_px is None:
         out["state"] = "open"  # bars end before an exit (data gap, or run too early)
         out["last_close"] = after[-1]["c"]
+        held = after[after.index(eb) + 1:]
+        out["mae_pts"] = max(0.0, entry - min(b["l"] for b in held)) if held else 0.0
         return out
+    held = after[after.index(eb) + 1:after.index(exit_bar) + 1]
     pts = exit_px - entry
-    out.update(exit=exit_px, exit_bar_open_et=et(exit_bar["t"]).strftime("%H:%M"),
+    out.update(mae_pts=max(0.0, entry - min(b["l"] for b in held)),
+               exit=exit_px, exit_bar_open_et=et(exit_bar["t"]).strftime("%H:%M"),
                exit_reason=reason, pts=pts, pnl_usd=round(pts * POINT_VALUE, 2))
     if reason == "stop":
         out["note"] = ("script still thinks it is long and will send an exit "

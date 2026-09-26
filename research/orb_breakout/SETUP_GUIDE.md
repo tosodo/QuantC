@@ -6,9 +6,9 @@ correctly-formatted alerts.
 
 **Status update (2026-08-27): all three steps this guide originally treated
 as future, separately-approved decisions have since happened.** The system
-is live and trading real money — Tradovate account LTE10089070250001 is
+is live on a **simulated** Lucid evaluation (see the correction below) — Tradovate account LTE10089070250001 is
 connected, the Lucid Trading LucidPro $100K evaluation is purchased and
-active, and test mode is off (real trades with real P&L are executing daily;
+active, and test mode is off (orders execute daily on the simulated evaluation account;
 account balance and per-trade P&L are visible on the Lucid dashboard). The
 steps below are kept as an accurate record of how the live setup was built,
 not as a still-pending plan — read "recommend paper/sim first" and "not
@@ -226,9 +226,55 @@ count live trades only.
 - **To confirm:** the −$5.00 slippage limit assumes about $2.50
   commission per round turn. Confirm it from the Tradovate fills.
 
+**Research and review (Phase 3, approved 2026-09-26).**
+
+- **Weekly review:** every Friday at 4:40 ET a Claude routine follows
+  [`ops/WEEKLY_REVIEW.md`](ops/WEEKLY_REVIEW.md) and appends to
+  `ops/weekly_reviews.md`. It is read-only and proposes at most one change.
+- **Live-rules backtest:** [`live_rules_backtest.py`](live_rules_backtest.py)
+  runs on your machine, because the Databento data is gitignored. It
+  backtests exactly what the live script trades, using the same replay code
+  as the journal. It covers:
+  - the down-break-first days that the research skipped
+  - a commission sensitivity table ($0 / $0.58 / $1.50 / $2.50 / $4.00 per
+    round turn; earlier runs used ES's cost, about $0.58, for MES)
+  - max drawdown, the longest losing streak, and the worst
+    day, week and month
+  - pass rates under Lucid's actual EOD-trailing rule with the $100,100
+    lock
+
+  Run it from this folder:
+
+      python3 live_rules_backtest.py > phase3_report.md
+
+  Then commit `phase3_report.md` and `phase3_trades.csv`; neither contains
+  raw market data.
+- **Missing scripts:** these are referenced by the v2 script and RESULTS.md
+  but not in the repo. Commit them from your machine, together with
+  `ruin.py` (`~/.claude/skills/propfirm-research-auditor/scripts/`) if you
+  want it versioned:
+  - `mes_m1_m4_checks.py` (source of the 84.3/77.6/68.8% pass rates)
+  - `mes_c1_stop_rerun.py`
+  - `mes_takeprofit_sweep.py`
+
 ## What the script does (and deliberately does not do)
 
-File: [orb_long_ghost.pine](orb_long_ghost.pine)
+> **The live script is not the one described in this section.** Live is
+> [`orb_long_ghost_DRAFT_mes_v2_accessible.pine`](orb_long_ghost_DRAFT_mes_v2_accessible.pine),
+> **MES only**, on the MES1! 1m chart. Compared with the original below:
+> - It sends a broker stop (`sl`), 125 pts ($625) below entry.
+> - It has a 90-minute underwater exit (`close <= entry`, re-checked every
+>   bar).
+> - It exits at the 15:59 bar, with a catch-all flatten for half-days.
+> - It has the stale-data entry guard.
+> - It has a hard MES/1m gate.
+> - MNQ is not traded.
+>
+> The rest of this section describes the original v1 script
+> (`orb_long_ghost.pine`: MNQ + MES, no stop), kept as a record of how the
+> setup was first built.
+
+File (original v1): [orb_long_ghost.pine](orb_long_ghost.pine)
 
 - **Long side only.** 9:30am ET open, 15-minute opening range, enters on the
   first 1-minute close beyond the range high. The short side was tested and
@@ -268,7 +314,10 @@ File: [orb_long_ghost.pine](orb_long_ghost.pine)
    message, not TradingView's `{{strategy.order.action}}`-style
    placeholders. This script builds the JSON itself, so "Any alert()
    function call" is the only correct choice here.
-3. **Expiration**: open-ended (no expiration), so it keeps running.
+3. **Expiration**: set the latest date offered. TradingView alerts do
+   expire; the live MES v2 alert is set to 31 Oct 2026 when redeployed. The
+   8:45 go/no-go check warns when 10 days or fewer are left. Extend it or
+   recreate the alert outside market hours.
 4. **Webhook URL**: toggle "Webhook URL" on, paste the URL from Ghost (see
    step 3 below) — it looks like
    `https://quantcrawler.com/api/ghost/webhook/<ticker-id>?secret=<your-secret>`.
@@ -286,7 +335,7 @@ For **each** instrument (MNQ, MES) in your QuantCrawler Ghost dashboard:
    separate decision from what this guide covers, but it's the obvious
    safer default while you watch this run for the first time. *(Historical
    note: this was the recommendation followed initially; the account has
-   since moved to live, real-money trading — see the status update at the
+   since moved to the live (simulated-evaluation) Lucid account — see the status update at the
    top of this file.)*
 2. Copy that ticker's webhook URL (with the secret already embedded) into
    the matching TradingView alert from step 2.
@@ -426,7 +475,8 @@ separate, later decisions, each needing its own explicit go-ahead:
 - ~~Connecting a live (non-paper) Tradovate account.~~ **Done** — connected
   and live.
 - ~~Turning test mode off / letting this place real orders.~~ **Done** —
-  test mode is off; real trades are executing with real money.
+  test mode is off; orders execute on the simulated Lucid evaluation
+  account (the evaluation fee, not trading capital, is what's at risk).
 
 All three happened with the deliberate go-ahead this section originally
 asked for, not silently. Nothing further is "not covered" at this point —
