@@ -159,9 +159,28 @@ the new alert gets the new expiry.
    still delayed it should read ~600s STALE, which is correct: entries are
    blocked.
 
-The Monday 8:45 ET check-in still applies to the new alert, which it finds
-by name. The guard is a backstop, not a substitute for fixing the data
+The daily 8:45 ET go/no-go check (below) applies to the new alert, which
+it finds by name. The guard is a backstop, not a substitute for fixing the data
 feed. While data is delayed the strategy takes no trades at all.
+
+**Daily go/no-go check (added 2026-09-26, council review Phase 1).** A
+Claude routine runs every weekday at **8:45 ET** and follows
+[`ops/GO_NO_GO.md`](ops/GO_NO_GO.md). It replaces the one-off Monday
+check-in. The criteria:
+
+- **Data latency (must pass):** the DEMO probe lag must be ≤ 2 min.
+- **Alert (must pass):** exactly one MES v2 alert exists, with no
+  duplicates.
+- **Expiry:** fails if the alert expires today; warns at ≤ 10 days left.
+- **Manual hold (must pass):** no `ops/HOLD` file. This is your kill
+  switch: tell Claude "hold trading" to create it, or "release the hold"
+  to remove it.
+- **Information only:** economic events and the account buffer are
+  reported but don't block trading.
+
+On **GO** the routine makes sure the alert is active. On **NO-GO** it
+stops the alert. It never touches an alert after 9:30 ET. Each verdict is
+logged to `ops/golive_log.csv`.
 
 ## What the script does (and deliberately does not do)
 
