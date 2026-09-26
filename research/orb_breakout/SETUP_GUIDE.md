@@ -116,6 +116,53 @@ while it persists.
 - After the open, check the first MES alert's `fired_at` is within ~1 min
   of its message `time`.
 
+**Stale-data guard (added 2026-09-26, council review Phase 1).**
+`orb_long_ghost_DRAFT_mes_v2_accessible.pine` now refuses to send a buy
+when its data is late:
+
+- On live (realtime) bars it measures `timenow − time_close` for each bar.
+  With live data this is a few seconds. On the 10-min delayed feed it's
+  ~600s.
+- If the breakout bar is more than **90 seconds** late (inputs → "Data
+  Safety"), no buy is sent. The script stands down for the rest of the day
+  and doesn't try a later entry. The chart shows "⚠ ENTRY SKIPPED — STALE
+  DATA" and the dashboard shows SKIPPED - STALE DATA.
+- **Exits are never blocked.** The JSON sent to Ghost is unchanged.
+  Historical bars aren't gated, so the chart history and backtest are the
+  same as before.
+- The dashboard has a new **DATA LAG** row showing the lag of the last live
+  bar, e.g. "3s - OK" or "602s - STALE, entries blocked". It's a quick visual
+  check before the open.
+
+**Deploying it: manual, outside market hours (Fri 5pm → Sun 6pm ET, or
+after 4pm ET).** A TradingView alert keeps running the script version it
+was created with. Updating the script alone does nothing, so the alert has
+to be recreated. This replaces the "extend the expiry" step above, because
+the new alert gets the new expiry.
+
+1. On the MES1! 1m chart, open the Pine Editor on "QuantC ORB Long MES v2
+   (validated) - Ghost (Accessible)". Replace its code with this file's
+   contents and **Save**. In the indicator's inputs, check:
+   - Data Safety → guard ON, 90s
+   - Test mode OFF
+   - $625 risk and 90 min unchanged
+2. Open the old alert 5571966155 (Alerts panel → Edit) and **copy its
+   Ghost webhook URL**. Close without saving.
+3. Create the new alert (step 2 below):
+   - Condition: the script → "Any alert() function call"
+   - Webhook: the same Ghost URL
+   - Message: default
+   - Expiration: 31 Oct 2026
+4. **Delete the old alert 5571966155.** Two live alerts pointed at the same
+   Ghost webhook would double every order.
+5. Check the chart dashboard shows the DATA LAG row. While the feed is
+   still delayed it should read ~600s STALE, which is correct: entries are
+   blocked.
+
+The Monday 8:45 ET check-in still applies to the new alert, which it finds
+by name. The guard is a backstop, not a substitute for fixing the data
+feed. While data is delayed the strategy takes no trades at all.
+
 ## What the script does (and deliberately does not do)
 
 File: [orb_long_ghost.pine](orb_long_ghost.pine)
