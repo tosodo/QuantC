@@ -182,6 +182,27 @@ On **GO** the routine makes sure the alert is active. On **NO-GO** it
 stops the alert. It never touches an alert after 9:30 ET. Each verdict is
 logged to `ops/golive_log.csv`.
 
+**Daily close routine and trade journal (added 2026-09-26, council review
+Phase 1).** A Claude routine runs every weekday at **4:15 ET** and follows
+[`ops/CLOSE_ROUTINE.md`](ops/CLOSE_ROUTINE.md). It is read-only: it never
+touches alerts.
+
+- **Replay:** it runs today's MES bars through
+  [`ops/shadow_day.py`](ops/shadow_day.py), which applies the script's rules
+  (checked against the week of 21-25 Sep). That gives the trade the
+  strategy made, whether or not the alert was live.
+- **Compare:** it checks the replay against what actually fired.
+- **URGENT warnings:** a buy with no exit (possibly still in a position:
+  be flat by 4:45 ET), or duplicate orders.
+- **Other flags:** a missed or unexpected entry (or a stale-guard skip), a
+  mismatched exit, late fires, and test mode left on.
+- **Journal:** it writes one row to `ops/journal.csv`: range, entry/exit,
+  signal P&L, alert lag, flags. The week of 21-25 Sep is backfilled.
+- **Your part:** on a live day it asks for Lucid's P&L, so it can record
+  slippage (Lucid P&L minus signal P&L, including commissions).
+- **Running figures, information only until Phase 2:** week-to-date P&L,
+  consecutive stops, and average slippage.
+
 ## What the script does (and deliberately does not do)
 
 File: [orb_long_ghost.pine](orb_long_ghost.pine)
