@@ -18,6 +18,9 @@ row. Stop.
 
 ## 1. Gather
 
+First run `git pull origin claude/beautiful-cray-9vkxjd`. The journal and
+other state live on that branch (see `RISK_RULES.md`).
+
 - **Alert log:** `mcp-tv-get-alerts-log`, today's fires.
   - The live alert's messages are
     `{"action":"buy","price":..,"sl":..,"time":..}` and
@@ -81,39 +84,48 @@ blank when it doesn't apply.
 | `exit`, `exit_time`, `exit_reason` | shadow exit (`stop`, `time_exit_90min`, `session_close`, `catch_all_flatten`) |
 | `signal_pnl` | shadow P&L in $, 1 MES, before costs |
 | `buy_lag_s`, `exit_lag_s` | lag of the live fires |
+| `qty` | `qty` in the live buy message (should be 1) |
 | `lucid_pnl` | the day's P&L reported by Lucid/Tradovate, supplied by the user. Blank until then |
 | `slippage` | `lucid_pnl − signal_pnl`, once `lucid_pnl` is known (includes commissions) |
 | `flags` | the reconcile items raised, `;`-separated, e.g. `exit_mismatch;late_fire` |
 | `notes` | anything else, briefly, without commas |
 
 **User-supplied P&L:** when a day was `live`, ask the user once in the
-report for Lucid's P&L for the day. When they give it, fill in `lucid_pnl`
-and `slippage` for that date. You can also fill in earlier blank days the
-same way.
+report for Lucid's P&L for the day. When they give it:
+- Fill in `lucid_pnl` and `slippage` for that date. Earlier blank days can
+  be filled in the same way.
+- If they also give Lucid's balance and minimum balance, add a row to
+  `ops/account.csv`.
+- Re-run `risk_state.py` and handle any rule that has now tripped as in
+  step 4.
 
-## 4. Running figures (information only until Phase 2)
+## 4. Risk rules (Phase 2)
 
-Compute these from `journal.csv` and report them:
+Run `python3 research/orb_breakout/ops/risk_state.py`. It applies the rules
+in `RISK_RULES.md` to the journal: 2 stops in a row, −$900 in a week, a
+buffer under $1,950, average slippage worse than −$5.00, or a size other
+than 1 MES.
 
-- **Week to date:** the sum of `lucid_pnl` for live days. Add the sum of
-  `signal_pnl` for all days that had an entry.
-- **Consecutive full stops** (`exit_reason` = `stop`) across entries,
-  counting back from today.
-- **Average `slippage`** over the last 10 live trades that have
-  `lucid_pnl`.
-
-Phase 2 would turn these into pause rules: 2 stops in a row, −$900 in a
-week, or average slippage worse than 2 ticks ($2.50) plus commissions.
-Until then they're only reported.
+- **`tripped` is not empty:** create or extend `ops/RISK_PAUSE` as
+  `RISK_RULES.md` describes. Report it as **RISK PAUSE**, second only to
+  an URGENT item. Tomorrow's 8:45 go/no-go will then be NO-GO.
+  **Don't stop the alert now.** It can't trade again today, and stopping
+  it is the morning check's job.
+- **Always report:**
+  - `week_live_pnl`
+  - `consecutive_stops`
+  - `buffer`, with "estimated" when `buffer_estimated`
+  - `avg_slippage` over `slippage_trades` trades
 
 ## 5. Commit and report
 
-Commit `journal.csv` and push to the working branch; it's merged with the
+Commit `journal.csv` (and `RISK_PAUSE` if created) and push to the working branch; it's merged with the
 next PR. Then tell the user in 3-6 lines:
 - Any **URGENT** item first.
 - Today's status and P&L (signal, and live lag).
 - Other flags.
-- The running figures.
+- Any RISK PAUSE.
+- The risk figures.
 - The Lucid P&L request, if the day was live.
 
 Don't message the user about a quiet `no_breakout` day beyond a single

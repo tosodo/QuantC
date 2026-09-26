@@ -200,8 +200,31 @@ touches alerts.
   signal P&L, alert lag, flags. The week of 21-25 Sep is backfilled.
 - **Your part:** on a live day it asks for Lucid's P&L, so it can record
   slippage (Lucid P&L minus signal P&L, including commissions).
-- **Running figures, information only until Phase 2:** week-to-date P&L,
-  consecutive stops, and average slippage.
+- **Running figures:** week-to-date P&L, consecutive stops, buffer, and
+  average slippage. They feed the risk rules below.
+
+**Risk rules (Phase 2, approved 2026-09-26).** Defined in
+[`ops/RISK_RULES.md`](ops/RISK_RULES.md) and checked by
+[`ops/risk_state.py`](ops/risk_state.py) at 4:15 and again at 8:45. They
+count live trades only.
+
+| rule | pauses when | clears |
+|---|---|---|
+| R1 | 2 full stops in a row | you say "resume" |
+| R2 | −$900 or worse this week | automatically the next Monday |
+| R3 | buffer above Lucid's minimum balance < $1,950 | you say "resume" (it trips again after another $625 of loss) |
+| R4 | average slippage over 10 trades worse than −$5.00/trade (from 28 Sep) | you say "resume" |
+| R5 | any buy for more than 1 MES | you say "resume" |
+
+- **How a pause works:** a tripped rule creates `ops/RISK_PAUSE`, and the
+  next 8:45 check is NO-GO until it clears.
+- **Size:** stays at 1 MES, even after the floor locks.
+- **Buffer tracking:** the buffer is tracked from the last Lucid snapshot
+  in `ops/account.csv` (24 Sep: balance $100,099, minimum $97,178) plus
+  each live day's P&L. Give Claude a newer balance and minimum balance
+  whenever you have one; that resets the estimate.
+- **To confirm:** the −$5.00 slippage limit assumes about $2.50
+  commission per round turn. Confirm it from the Tradovate fills.
 
 ## What the script does (and deliberately does not do)
 
