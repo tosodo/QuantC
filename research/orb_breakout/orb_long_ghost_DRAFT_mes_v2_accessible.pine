@@ -4,7 +4,8 @@ indicator("QuantC ORB Long MES v2 (validated) - Ghost (Accessible)", overlay=tru
 // ============================================================================
 // ACCESSIBLE VERSION of orb_long_ghost_DRAFT_mes_v2.pine.
 //
-// TRADING LOGIC IS UNCHANGED - every line under "STRATEGY CALCULATIONS" and
+// TRADING LOGIC IS UNCHANGED (except the 2026-09-26 stale-data entry guard,
+// described below) - every line under "STRATEGY CALCULATIONS" and
 // "ENTRY / EXIT" below, and the two alert() calls, are copied verbatim from
 // the original draft. Nothing about when a trade fires, what stop distance
 // is used, or what JSON is sent to Ghost has been touched. Everything below
@@ -25,6 +26,16 @@ indicator("QuantC ORB Long MES v2 (validated) - Ghost (Accessible)", overlay=tru
 // intentionally still a dormant draft, sitting unused on the "QuantC -
 // Drafts & Testing" chart, and correctly keeps its "DRAFT, NOT LIVE" name
 // and testMode=true default.
+//
+// STALE-DATA GUARD added 2026-09-26 (council review, Phase 1). The week of
+// 2026-09-21 every alert fired ~10 min after its bar closed because the
+// CME real-time feed was not reaching TradingView's alert servers, so
+// entries went to Ghost at prices the backtest never tested. On REALTIME
+// bars only, a breakout bar that is processed more than maxAlertLagSec after
+// it closed does NOT send a buy - the script stands down for the day instead
+// (no later, untested re-entry). Exit alerts are never blocked, the JSON
+// sent to Ghost is byte-for-byte unchanged, and historical bars are not
+// affected, so the chart and backtest behaviour are identical to before.
 // ============================================================================
 
 // ---------------------------------------------------------------------------
@@ -37,6 +48,9 @@ timeExitMin    = input.int(90, "Underwater time-exit, minutes after entry", minv
 
 enableFundedPhaseCap  = input.bool(false, "Funded phase: cap profit per trade (Lucid 40% consistency rule)", group="Strategy", tooltip="OFF during evaluation - see orb_long_ghost_DRAFT_mes_v2.pine's header comment. Turn ON once funded.")
 maxDailyProfitDollars = input.float(300, "Max profit per trade before force-exit (funded phase only)", minval=1, group="Strategy", tooltip="Only used when the toggle above is ON. Default $300 = 40% of the confirmed $750/cycle funded payout target.")
+
+enableStaleGuard = input.bool(true, "Block entries on stale (delayed) data", group="Data Safety", tooltip="On realtime bars, skip the day's entry if the breakout bar is processed more than the lag limit after it closed. Exits are never blocked.")
+maxAlertLagSec   = input.int(90, "Max data lag for an entry (seconds)", minval=10, group="Data Safety", tooltip="Live CME data is processed within a few seconds of bar close; delayed data is ~600s.")
 
 stopPoints = maxRiskDollars / (qty * syminfo.pointvalue)
 
@@ -99,6 +113,20 @@ else if rangeWin
 rangeComplete = rangeBarCount >= 15
 longSignal    = fullSession and not tradedToday and rangeComplete and close > rangeHigh and validSymbol and validTimeframe
 
+// Stale-data guard (see header). timenow - time_close is ~0-5s on a live
+// feed and ~600s on a 10-min delayed feed. Historical bars are never gated.
+barLagSec     = barstate.isrealtime ? (timenow - time_close) / 1000.0 : 0.0
+dataStale     = enableStaleGuard and barstate.isrealtime and barLagSec > maxAlertLagSec
+takeEntry     = longSignal and not dataStale
+staleBlocked  = longSignal and dataStale
+
+var bool  staleSkipToday = false
+var float lastLagSec     = na
+if rangeWinStart
+    staleSkipToday := false
+if barstate.isrealtime and barstate.isconfirmed
+    lastLagSec := barLagSec
+
 minutesSinceEntry = inPosition ? (time - entryTime) / 60000 : na
 pastTimeExitCutoff = inPosition and fullSession and minutesSinceEntry >= timeExitMin
 timeExitTriggered   = pastTimeExitCutoff and close <= entryPrice   // re-checked every bar past the cutoff (M1 fix)
@@ -112,11 +140,16 @@ tsIso() =>
     str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
 
 // ---------------------------------------------------------------------------
-// 4. ENTRY / EXIT + ALERTS (original, unchanged - this is what Ghost receives)
+// 4. ENTRY / EXIT + ALERTS (JSON unchanged - this is what Ghost receives;
+//    only the entry is gated by the stale-data guard)
 // ---------------------------------------------------------------------------
 var string lastExitReason = na
 
-if longSignal
+if staleBlocked
+    tradedToday    := true    // stand down for the day - no later, untested re-entry
+    staleSkipToday := true
+
+if takeEntry
     tradedToday     := true
     inPosition      := true
     entryPrice      := close
@@ -161,6 +194,8 @@ signalStateText() =>
     string txt = na
     if inPosition
         txt := "LONG (OPEN)"
+    else if staleSkipToday
+        txt := "SKIPPED - STALE DATA"
     else if tradedToday
         txt := "DONE FOR DAY"
     else if rangeComplete and fullSession
@@ -185,20 +220,24 @@ plot(inPosition ? entryPrice - stopPoints : na, title="Stop-loss level", color=e
 // ---------------------------------------------------------------------------
 // 7. SIGNAL / ENTRY / STOP / EXIT LABELS (new - bounded, event-anchored)
 // ---------------------------------------------------------------------------
-if enableAccessibleMode and longSignal and showBuyEntryLabels
+if enableAccessibleMode and takeEntry and showBuyEntryLabels
     buyLbl = label.new(bar_index, low, "▲ BUY\nENTRY " + str.tostring(close, format.mintick), style=label.style_label_up, color=entryColor, textcolor=color.black, size=labelSize)
     trackLabel(buyLbl)
 
-if enableAccessibleMode and longSignal and showStopLabels
+if enableAccessibleMode and takeEntry and showStopLabels
     stopLbl = label.new(bar_index, close - stopPoints, "✕ STOP\n" + str.tostring(close - stopPoints, format.mintick), style=label.style_label_down, color=stopColor, textcolor=color.white, size=labelSize)
     trackLabel(stopLbl)
+
+if enableAccessibleMode and staleBlocked
+    skipLbl = label.new(bar_index, low, "⚠ ENTRY SKIPPED\nSTALE DATA (" + str.tostring(barLagSec, "#") + "s late)", style=label.style_label_up, color=warningColor, textcolor=color.black, size=labelSize)
+    trackLabel(skipLbl)
 
 if enableAccessibleMode and exitSignal and showExitLabels
     exitLbl = label.new(bar_index, high, "EXIT\n" + exitReasonText(lastExitReason), style=label.style_label_down, color=exitColor, textcolor=color.black, size=labelSize)
     trackLabel(exitLbl)
 
 // Non-accessible fallback markers (kept so turning accessible mode off doesn't lose signal visibility entirely)
-plotshape(not enableAccessibleMode and longSignal, title="Long signal (plain)", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(not enableAccessibleMode and takeEntry, title="Long signal (plain)", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
 plotshape(not enableAccessibleMode and exitSignal, title="Exit signal (plain)", style=shape.xcross, location=location.abovebar, color=color.gray, size=size.tiny)
 
 // ---------------------------------------------------------------------------
@@ -213,7 +252,7 @@ if barstate.islast and not validTimeframe
 posMap(p) =>
     p == "Top Right" ? position.top_right : p == "Top Left" ? position.top_left : p == "Bottom Right" ? position.bottom_right : position.bottom_left
 
-var table dash = table.new(posMap(dashPosition), 2, 9, border_width=1)
+var table dash = table.new(posMap(dashPosition), 2, 10, border_width=1)
 
 addRow(rowIdx, lbl, val, valColor) =>
     table.cell(dash, 0, rowIdx, lbl, text_color=color.white, text_size=size.normal, bgcolor=#1B2230)
@@ -238,6 +277,9 @@ if enableAccessibleMode and showDashboard and barstate.islast
     addRow(row, "TAKE PROFIT", "N/A - time / session exit", color.gray)
     row += 1
     addRow(row, "TIME EXIT", str.tostring(timeExitMin) + " min underwater", color.white)
+    row += 1
+    lagStale = not na(lastLagSec) and lastLagSec > maxAlertLagSec
+    addRow(row, "DATA LAG", na(lastLagSec) ? "— (no live bar yet)" : str.tostring(lastLagSec, "#") + "s" + (lagStale ? " - STALE, entries blocked" : " - OK"), lagStale ? warningColor : color.white)
     row += 1
     if wrongSymbol or wrongTimeframe
         addRow(row, "BLOCKED", wrongSymbol ? "WRONG SYMBOL" : "WRONG TIMEFRAME", warningColor)
