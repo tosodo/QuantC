@@ -1,0 +1,2 @@
+time_utc,alert_id,action,requested_by,active_after,guard_version,notes
+2026-09-28T22:37Z,5571966155,restart,user,true,false,user asked to reinstate the live alert after two on-time DEMO probe fires (19:15 and 22:18 UTC) - 9 Sep build without the stale-data guard - 8:45 go/no-go still gates it
