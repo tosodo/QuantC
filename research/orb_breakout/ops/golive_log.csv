@@ -1,1 +1,2 @@
 date,verdict,median_lag_s,probe_fires,alert_id,alert_active_after,guard_version,expiry,events,risk,notes
+2026-09-28,NO-GO,600,4,5571966155,false,false,2026-11-25,,ok,cannot verify at 8:45 - tool permission check errored - row written at 16:15 - probe fires since Sun reopen all 600s late so latency would also have failed - alert already paused - no action taken
