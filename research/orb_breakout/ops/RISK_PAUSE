@@ -1,0 +1,4 @@
+rule: R5_size
+tripped: 2026-09-30
+figures: qty=2 week_live_pnl=-13.75 (estimated) buffer=2907 (estimated)
+clears: user says "resume"
