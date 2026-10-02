@@ -2,3 +2,7 @@ rule: R5_size
 tripped: 2026-09-30
 figures: qty=2 week_live_pnl=-13.75 (estimated) buffer=2907 (estimated)
 clears: user says "resume"
+rule: R5_size (again)
+tripped: 2026-10-02
+figures: qty=2 traded during pause after alert was restarted outside the routines - week_live_pnl=-182.50 per risk_state (1-lot estimate; about -355 at qty 2) buffer=2738 (estimated; about 2566 at qty 2)
+clears: user says "resume"
