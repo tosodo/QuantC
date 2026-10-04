@@ -1,0 +1,215 @@
+//@version=5
+indicator("QuantC Noise-Area MNQ - PAPER TEST ONLY", overlay=true, max_labels_count=50)
+
+// ============================================================================
+// PAPER TEST ONLY (written 2026-10-03). Every alert carries "test":true and
+// that is HARD-CODED below (TEST_MODE is a constant, not an input), so this
+// script cannot place a real order even if a setting is clicked by mistake.
+// Going live would need a deliberate source edit plus the user's yes.
+//
+// WHAT IT IS: the "noise area" intraday-momentum rule from Zarattini, Barbon
+// & Aziz (2024), "Beat the Market: An Effective Intraday Momentum Strategy
+// for S&P500 ETF (SPY)", with the paper's own settings and no tuning:
+//   1. Each session, note the 09:30 ET open and yesterday's 16:00 close.
+//   2. sigma(t) = average, over the previous 14 sessions, of |price / open - 1|
+//      at the same time of day t.
+//   3. Upper band = max(open, prev close) x (1 + sigma)
+//      Lower band = min(open, prev close) x (1 - sigma)
+//   4. Check ONLY every half hour (10:00, 10:30 ... 15:30 ET, using the close
+//      of the 30-min bar that ends at that time):
+//        - long:  exit if close < max(upper band, session VWAP)
+//        - short: exit if close > min(lower band, session VWAP)
+//        - flat:  buy if close > upper band, sell short if close < lower band
+//   5. Flat at the 16:00 close. Never held overnight. No fixed stop.
+//
+// RESEARCH (read-only, 3 Oct 2026; files in ~/qc-demo-test/research-2026-10-03/):
+//   5-yr NQ 1-min, 1 MNQ at today's prices: +$51 per trading day, 46% win,
+//   positive every year 2021-2026, survives double costs. NOT PROVEN: the
+//   newer-period gain rests on ~3 big days (drop them -> ~breakeven), it is
+//   the best of ~8 market/idea combinations tried, and the same rule did not
+//   work on ES or YM. Worst day ~-$1,300 and worst drawdown ~-$4,900 at
+//   1 MNQ - larger than the Lucid cushion ($2,564 on 3 Oct). The point of this
+//   paper run is to check it BEHAVES like the backtest on fresh days and runs
+//   cleanly through TradingView -> Ghost, not to prove profit in 4 weeks.
+//
+// CHART: runs on the MNQ 30-MINUTE chart (changed 3 Oct from 1-min). The rule only acts on
+// half-hour closes, and TradingView loads only ~a week of 1-min bars - too few for the 14-session
+// lookback, so on 1-min it would never trade. Each 30-min bar closes exactly at a check time.
+// Checked on 5-yr NQ (paper_check.py): 30-min bars (incl. VWAP from 30-min bars) give IDENTICAL
+// daily P&L to the 1-min research on all 732 trading days.
+//
+// GHOST: needs its own ticker (MNQ), in TEST mode, allowing both buy and
+// sell, more than one trade per day, with "Use Stop Loss and Take Profit"
+// OFF (this rule sends no sl/tp - its exits come as "exit" alerts). Ghost's
+// documented behaviour for a "sell" while long (and vice versa) is to close
+// the open position first, then open the new side, so a same-bar reversal
+// is sent as ONE message.
+//
+// KNOWN DIFFERENCES vs the Python backtest: Python skipped CME half-days
+// entirely; on a half-day this script still runs, and its session-close exit
+// may not fire (pause it on 27 Nov and 24 Dec). Python booked a cost on an
+// exit-and-immediate-re-entry in the same direction; here that is a no-op.
+// ============================================================================
+
+TEST_MODE   = true          // hard-coded paper mode - do not turn into an input
+QTY         = 1             // 1 micro contract
+LOOKBACK    = 14            // paper's setting
+SLOTS       = 12            // half-hour checks 10:00 ... 15:30 ET
+RING        = LOOKBACK + 1  // today + 14 previous sessions
+
+validSymbol    = syminfo.root == "MNQ"
+validTimeframe = timeframe.period == "30"
+canTrade       = validSymbol and validTimeframe
+
+inSession    = not na(time(timeframe.period, "0930-1600", "America/New_York"))
+sessionStart = inSession and not inSession[1]
+etHour       = hour(time, "America/New_York")
+etMin        = minute(time, "America/New_York")
+minOfDay     = etHour * 60 + etMin                       // bar OPEN minute
+// 30-min bars opening 09:30 ... 15:00 close at the checks 10:00 ... 15:30
+isCheckBar   = inSession and minOfDay >= 570 and minOfDay <= 900 and (minOfDay - 570) % 30 == 0
+slot         = isCheckBar ? int((minOfDay - 570) / 30) : -1
+isLastBar    = inSession and minOfDay == 930              // 15:30 bar, closes at 16:00
+
+var array<float> hist = array.new_float(SLOTS * RING, na)
+var int   dayCount   = 0
+var int   todayPos   = 0
+var float dayOpen    = na
+var float prevClose  = na
+var float rthClose   = na
+var float cumPV      = 0.0
+var float cumVol     = 0.0
+var int   posDir     = 0        // 1 long, -1 short, 0 flat
+var float entryPx    = na
+var float upperBand  = na
+var float lowerBand  = na
+var float dayPnlPts  = 0.0
+var float totPnlPts  = 0.0
+var int   totTrades  = 0
+var int   dayTrades  = 0
+
+f_sigma(int s, int skipPos) =>
+    float sum = 0.0
+    int   n   = 0
+    for k = 0 to RING - 1
+        if k != skipPos
+            v = array.get(hist, s * RING + k)
+            if not na(v)
+                sum += v
+                n   += 1
+    n == LOOKBACK ? sum / LOOKBACK : na
+
+tsIso() =>
+    str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+f_msg(string action, string reason) =>
+    string m = '{"action":"' + action + '"'
+    if action != "exit"
+        m += ',"price":' + str.tostring(close) + ',"qty":' + str.tostring(QTY)
+    m += ',"reason":"' + reason + '","time":"' + tsIso() + '"' + (TEST_MODE ? ',"test":true' : '') + '}'
+    m
+
+if sessionStart and barstate.isconfirmed
+    dayCount  += 1
+    todayPos  := dayCount % RING
+    for s = 0 to SLOTS - 1
+        array.set(hist, s * RING + todayPos, na)
+    dayOpen   := open
+    prevClose := rthClose
+    cumPV     := 0.0
+    cumVol    := 0.0
+    dayPnlPts := 0.0
+    dayTrades := 0
+    upperBand := na
+    lowerBand := na
+
+if inSession and barstate.isconfirmed
+    cumPV  += hlc3 * volume
+    cumVol += volume
+vwapS = cumVol > 0 ? cumPV / cumVol : na
+
+string alertAction = ""
+string alertReason = ""
+
+if isCheckBar and barstate.isconfirmed and not na(dayOpen)
+    sig = f_sigma(slot, todayPos)
+    if not na(sig) and not na(prevClose)
+        upperBand := math.max(dayOpen, prevClose) * (1 + sig)
+        lowerBand := math.min(dayOpen, prevClose) * (1 - sig)
+        int before = posDir
+        // exits first
+        if posDir == 1 and close < math.max(upperBand, vwapS)
+            dayPnlPts += close - entryPx
+            posDir := 0
+        else if posDir == -1 and close > math.min(lowerBand, vwapS)
+            dayPnlPts += entryPx - close
+            posDir := 0
+        // then entries
+        if posDir == 0 and canTrade
+            if close > upperBand
+                posDir  := 1
+                entryPx := close
+            else if close < lowerBand
+                posDir  := -1
+                entryPx := close
+        if posDir != before
+            if posDir == 1
+                alertAction := "buy"
+                alertReason := "noise_area_break_up"
+            else if posDir == -1
+                alertAction := "sell"
+                alertReason := "noise_area_break_down"
+            else
+                alertAction := "exit"
+                alertReason := "band_or_vwap_exit"
+            if posDir != 0
+                dayTrades += 1
+                totTrades += 1
+    // record today's move-from-open for this slot AFTER using the history
+    array.set(hist, slot * RING + todayPos, math.abs(close / dayOpen - 1))
+
+if isLastBar and barstate.isconfirmed
+    if posDir != 0
+        dayPnlPts += posDir * (close - entryPx)
+        posDir := 0
+        alertAction := "exit"
+        alertReason := "session_close"
+    rthClose  := close
+    totPnlPts += dayPnlPts
+
+// backstop: still holding once the session window has ended (e.g. a half-day)
+if posDir != 0 and not inSession and barstate.isconfirmed
+    dayPnlPts += posDir * (close - entryPx)
+    totPnlPts += dayPnlPts
+    dayPnlPts := 0.0
+    posDir := 0
+    alertAction := "exit"
+    alertReason := "catch_all_flatten"
+
+if alertAction != "" and canTrade
+    alert(f_msg(alertAction, alertReason), alert.freq_once_per_bar_close)
+    // readable trail in the Pine Logs panel, for checking against paper_check.py
+    log.info(str.format_time(time_close, "yyyy-MM-dd HH:mm", "America/New_York") + " " + alertAction + " @" + str.tostring(close) + " (" + alertReason + ")")
+
+plot(inSession ? upperBand : na, "Upper band (last check)", color=color.new(color.green, 0), style=plot.style_stepline)
+plot(inSession ? lowerBand : na, "Lower band (last check)", color=color.new(color.red, 0), style=plot.style_stepline)
+plot(inSession ? vwapS : na, "Session VWAP", color=color.new(color.orange, 30))
+plotshape(alertAction == "buy",  "Buy",  shape.triangleup,   location.belowbar, color.green, size=size.small)
+plotshape(alertAction == "sell", "Sell", shape.triangledown, location.abovebar, color.red,   size=size.small)
+plotshape(alertAction == "exit", "Exit", shape.xcross,       location.abovebar, color.gray,  size=size.tiny)
+
+var table info = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 20), border_width=1)
+if barstate.islast
+    pv = syminfo.pointvalue * QTY
+    table.cell(info, 0, 0, "PAPER TEST ONLY", text_color=color.yellow)
+    table.cell(info, 1, 0, canTrade ? "chart OK" : "BLOCKED: use MNQ 30-min", text_color=canTrade ? color.lime : color.red)
+    table.cell(info, 0, 1, "Position", text_color=color.white)
+    table.cell(info, 1, 1, posDir == 1 ? "LONG" : posDir == -1 ? "SHORT" : "flat", text_color=color.white)
+    table.cell(info, 0, 2, "Today (paper)", text_color=color.white)
+    table.cell(info, 1, 2, str.tostring(dayTrades) + " trades, $" + str.tostring((dayPnlPts + (posDir != 0 ? posDir * (close - entryPx) : 0)) * pv, "#,##0"), text_color=color.white)
+    table.cell(info, 0, 3, "Chart history (paper)", text_color=color.white)
+    table.cell(info, 1, 3, str.tostring(totTrades) + " trades, $" + str.tostring(totPnlPts * pv, "#,##0") + " (no costs)", text_color=color.white)
+    table.cell(info, 0, 4, "Sessions loaded", text_color=color.white)
+    table.cell(info, 1, 4, str.tostring(dayCount) + (dayCount <= LOOKBACK ? " (needs 15+ to trade)" : ""), text_color=color.white)
+    table.cell(info, 0, 5, "Mode", text_color=color.white)
+    table.cell(info, 1, 5, TEST_MODE ? "test:true on every alert" : "LIVE", text_color=TEST_MODE ? color.lime : color.red)
