@@ -1,5 +1,5 @@
 //@version=5
-indicator("QuantC Noise-Area MNQ - PAPER TEST ONLY", overlay=true, max_labels_count=50)
+indicator("QuantC Noise-Area MNQ - PAPER TEST ONLY", overlay=true, max_labels_count=500)
 
 // ============================================================================
 // PAPER TEST ONLY (written 2026-10-03). Every alert carries "test":true and
@@ -130,6 +130,8 @@ vwapS = cumVol > 0 ? cumPV / cumVol : na
 
 string alertAction = ""
 string alertReason = ""
+float  tradeUsd    = na     // paper result of a trade closed on this bar
+int    exitedDir   = 0      // which side was closed on this bar (1 long, -1 short)
 
 if isCheckBar and barstate.isconfirmed and not na(dayOpen)
     sig = f_sigma(slot, todayPos)
@@ -140,9 +142,13 @@ if isCheckBar and barstate.isconfirmed and not na(dayOpen)
         // exits first
         if posDir == 1 and close < math.max(upperBand, vwapS)
             dayPnlPts += close - entryPx
+            tradeUsd  := (close - entryPx) * syminfo.pointvalue * QTY
+            exitedDir := 1
             posDir := 0
         else if posDir == -1 and close > math.min(lowerBand, vwapS)
             dayPnlPts += entryPx - close
+            tradeUsd  := (entryPx - close) * syminfo.pointvalue * QTY
+            exitedDir := -1
             posDir := 0
         // then entries
         if posDir == 0 and canTrade
@@ -171,6 +177,8 @@ if isCheckBar and barstate.isconfirmed and not na(dayOpen)
 if isLastBar and barstate.isconfirmed
     if posDir != 0
         dayPnlPts += posDir * (close - entryPx)
+        tradeUsd  := posDir * (close - entryPx) * syminfo.pointvalue * QTY
+        exitedDir := posDir
         posDir := 0
         alertAction := "exit"
         alertReason := "session_close"
@@ -180,6 +188,8 @@ if isLastBar and barstate.isconfirmed
 // backstop: still holding once the session window has ended (e.g. a half-day)
 if posDir != 0 and not inSession and barstate.isconfirmed
     dayPnlPts += posDir * (close - entryPx)
+    tradeUsd  := posDir * (close - entryPx) * syminfo.pointvalue * QTY
+    exitedDir := posDir
     totPnlPts += dayPnlPts
     dayPnlPts := 0.0
     posDir := 0
@@ -194,11 +204,45 @@ if alertAction != "" and canTrade
 plot(inSession ? upperBand : na, "Upper band (last check)", color=color.new(color.green, 0), style=plot.style_stepline)
 plot(inSession ? lowerBand : na, "Lower band (last check)", color=color.new(color.red, 0), style=plot.style_stepline)
 plot(inSession ? vwapS : na, "Session VWAP", color=color.new(color.orange, 30))
-plotshape(alertAction == "buy",  "Buy",  shape.triangleup,   location.belowbar, color.green, size=size.small)
-plotshape(alertAction == "sell", "Sell", shape.triangledown, location.abovebar, color.red,   size=size.small)
-plotshape(alertAction == "exit", "Exit", shape.xcross,       location.abovebar, color.gray,  size=size.tiny)
+// ---- trade labels: one word for WHAT, a few words for WHY, and the paper result on exits.
+// Hover a label for the time, price and a plain-English explanation.
+f_usd(float v) => (v >= 0 ? "+$" : "-$") + str.tostring(math.abs(v), "#,##0")
 
-var table info = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 20), border_width=1)
+if alertAction != "" and canTrade
+    string head = ""
+    string why  = ""
+    string tip  = ""
+    color  col  = color.new(color.gray, 0)
+    bool   up   = false
+    if alertAction == "buy"
+        head := "BUY"
+        why  := "broke above band"
+        tip  := "Price closed ABOVE the upper band at the half-hour check, so the rule went long 1 MNQ (paper)."
+        col  := color.new(color.green, 0)
+        up   := true
+    else if alertAction == "sell"
+        head := "SELL"
+        why  := "broke below band"
+        tip  := "Price closed BELOW the lower band at the half-hour check, so the rule went short 1 MNQ (paper)."
+        col  := color.new(color.red, 0)
+    else
+        head := "EXIT"
+        why  := alertReason == "session_close" ? "4pm close" : alertReason == "catch_all_flatten" ? "safety close" : exitedDir == 1 ? "fell back inside" : "rose back inside"
+        tip  := alertReason == "session_close" ? "End of the trading day: the rule never holds a position overnight." : alertReason == "catch_all_flatten" ? "Backstop close after the session ended (e.g. a short trading day)." : exitedDir == 1 ? "Price fell back below the upper band or the day's average price (VWAP), so the long was closed." : "Price rose back above the lower band or the day's average price (VWAP), so the short was closed."
+        col  := not na(tradeUsd) and tradeUsd >= 0 ? color.new(color.teal, 0) : color.new(color.gray, 0)
+        up   := exitedDir == -1
+    string txt = head + "\n" + why
+    if not na(tradeUsd)
+        txt += "\n" + (alertAction == "exit" ? "" : (exitedDir == 1 ? "long closed " : "short closed ")) + f_usd(tradeUsd)
+    tip := str.format_time(time_close, "EEE d MMM HH:mm", "America/New_York") + " New York  @ " + str.tostring(close, format.mintick) + "\n" + tip + (not na(tradeUsd) ? "\nTrade result (paper, no costs): " + f_usd(tradeUsd) : "")
+    // full labels for the last 7 days only; older trades shrink to small markers (hover still explains)
+    bool recent = time >= timenow - 7 * 86400000
+    if recent
+        label.new(bar_index, close, txt, yloc=up ? yloc.belowbar : yloc.abovebar, color=col, textcolor=color.white, style=up ? label.style_label_up : label.style_label_down, size=size.small, tooltip=tip)
+    else
+        label.new(bar_index, close, "", yloc=up ? yloc.belowbar : yloc.abovebar, color=col, style=alertAction == "exit" ? label.style_xcross : up ? label.style_triangleup : label.style_triangledown, size=size.tiny, tooltip=txt + "\n" + tip)
+
+var table info = table.new(position.bottom_right, 2, 6, bgcolor=color.new(color.black, 20), border_width=1)
 if barstate.islast
     pv = syminfo.pointvalue * QTY
     table.cell(info, 0, 0, "PAPER TEST ONLY", text_color=color.yellow)
