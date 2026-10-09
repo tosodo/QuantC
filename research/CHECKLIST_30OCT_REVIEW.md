@@ -12,7 +12,7 @@ done without your explicit yes at the time.
 | Ongoing | Paper test keeps running (alert active, webhook ticker starts `a8e5bab1`) | No change |
 | Fri 23 Oct | Ghost bills about $69. Confirm the bill is expected and inside the $670 cap | You decide whether to pay |
 | Mon 26 Oct, 9am | Inactivity-trade reminder fires | Reminder only |
-| 26-29 Oct | ONE small manual trade to avoid the 30-day inactivity reset (agreed 4 Oct; last trade was 2 Oct, deadline about 1 Nov) | Yes on the day; check the Lucid rules article first |
+| Tue 27 Oct (DECIDED 9 Oct; 28-29 Oct are spare days) | ONE small manual trade to avoid the 30-day inactivity reset (agreed 4 Oct; last trade was 2 Oct, deadline about 1 Nov) | Yes on the day; check the Lucid rules article first |
 | Fri 30 Oct | Last trading day for inactivity purposes. Review after the US close | Yes for any decision |
 
 ## 2. What I gather on 30 Oct (read-only)
@@ -30,6 +30,19 @@ done without your explicit yes at the time.
 - A passes, B fails: drop the idea and wind down.
 - A and B pass, C fails: wind down.
 - A, B and C pass: switch the Lucid account to the Nasdaq rule at 1 micro contract, alone, MES alert off. Your explicit yes on the day.
+
+## 3b. Extension limit (added 9 Oct 2026, before any results exist)
+
+The test is NOT extended to keep hunting for an edge. At most ONE extra test
+period is allowed, and only for one of these reasons:
+- A machinery fault (Part A fails): fix it and restart the 4-week clock once.
+- Too few usable sessions (fewer than 15, for example the alert was off): extend until there are enough.
+
+If the strategy simply does not behave like the backtest (Part B fails), or is
+not worth it for the account (Part C fails), the default is to wind down. A
+second extra period, or any extension chosen after seeing the P&L, needs a new
+written reason and your explicit yes. Reasons: eight ideas have failed their
+screens, spending is capped at about $670, and Ghost costs about $69 a month.
 
 ## 4. Items added since 4 Oct (for you to rule on; not pass/fail)
 
@@ -55,4 +68,4 @@ done without your explicit yes at the time.
 ## 7. Decisions I need from you before 30 Oct
 
 1. Do you want this checklist saved as-is as the working copy? (Committing and pushing is a separate yes.)
-2. Should the inactivity trade be done on 26 or 27 Oct? (Recommend 27 Oct, leaving a spare day.)
+2. Inactivity trade date: DECIDED 9 Oct, Tuesday 27 Oct.
