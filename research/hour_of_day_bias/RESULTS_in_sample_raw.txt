@@ -1,0 +1,62 @@
+NQ: day-windows 28271, skipped (missing bar or roll) 164
+ES: day-windows 28271, skipped (missing bar or roll) 446
+cutoff (NQ dates, position only): in-sample through 2025-02-17
+
+==============================================================================
+NQ IN-SAMPLE  average of the 22 window means: +0.073 bp
+==============================================================================
+hour  n     mean_bp   z      p(two)    beatsAvg top3  halves  net>=2xcost
+00    867    +0.270   +0.67   0.50193   True   True   False  False
+01    897    +0.464   +0.96   0.33796   True   True   True   True
+02    903    -0.351   -0.62   0.53396   True   True   True   False
+03    903    +0.520   +0.65   0.51892   True   True   False  True
+04    904    -0.248   -0.34   0.73743   True   False  True   False
+05    904    +0.020   +0.03   0.97317   False  False  False  False
+06    904    +0.347   +0.61   0.53966   True   True   True   False
+07    904    -0.280   -0.41   0.68181   True   False  False  False
+08    903    -1.103   -0.77   0.44189   True   False  False  True
+09    902    +0.623   +0.38   0.70597   True   False  True   True
+10    902    -2.674   -1.54   0.12358   True   True   True   True
+11    902    +2.870   +2.13   0.03281   True   True   True   True
+12    902    -0.874   -0.78   0.43514   True   True   False  True
+13    870    +0.856   +0.68   0.49551   True   True   True   True
+14    870    +1.191   +0.96   0.33912   True   True   False  True
+15    870    -0.568   -0.37   0.70979   True   False  False  True
+18    884    +0.169   +0.26   0.79522   True   False  False  False
+19    884    -0.375   -0.66   0.50781   True   False  False  False
+20    904    -0.210   -0.36   0.72068   True   False  True   False
+21    901    -0.051   -0.10   0.92165   True   False  False  False
+22    897    +0.177   +0.37   0.71211   True   False  True   False
+23    883    +0.832   +2.29   0.02205   True   True   True   True
+
+==============================================================================
+ES IN-SAMPLE  average of the 22 window means: +0.088 bp
+==============================================================================
+hour  n     mean_bp   z      p(two)    beatsAvg top3  halves  net>=2xcost
+00    793    +0.364   +1.05   0.29276   True   True   False  False
+01    878    +0.216   +0.60   0.54850   True   True   True   False
+02    901    -0.717   -1.59   0.11104   True   True   True   False
+03    904    +0.190   +0.29   0.77217   True   False  False  False
+04    901    +0.176   +0.31   0.75867   True   False  False  False
+05    898    +0.026   +0.05   0.95618   False  False  False  False
+06    896    +0.599   +1.25   0.21091   True   True   True   False
+07    904    -0.147   -0.28   0.77843   True   False  False  False
+08    903    -0.663   -0.58   0.56133   True   False  False  False
+09    902    +1.246   +1.17   0.24287   True   True   True   True
+10    902    -1.502   -1.19   0.23322   True   True   True   True
+11    902    +1.395   +1.40   0.16221   True   True   True   True
+12    901    -0.520   -0.62   0.53619   True   True   False  False
+13    870    +0.445   +0.46   0.64384   True   False  True   False
+14    870    +0.715   +0.71   0.47675   True   True   False  False
+15    870    -0.149   -0.12   0.90709   True   False  False  False
+18    852    +0.179   +0.36   0.71553   True   False  True   False
+19    842    -0.603   -1.28   0.19932   True   True   False  False
+20    896    -0.222   -0.48   0.63188   True   False  True   False
+21    896    -0.047   -0.11   0.91071   True   False  False  False
+22    874    +0.217   +0.56   0.57754   True   True   True   False
+23    836    +0.743   +2.44   0.01455   True   True   True   False
+
+==============================================================================
+VERDICT (IN-SAMPLE), bar p < 0.00227 on both with same sign
+==============================================================================
+candidates: 0   nearest p (min over hours of max(NQ,ES)): (0.022047494447080762, 23)

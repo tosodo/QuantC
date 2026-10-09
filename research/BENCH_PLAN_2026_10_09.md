@@ -69,7 +69,7 @@ paper (demo) forward tests, and keep ONE strategy live.
 |---|---|---|---|---|---|---|
 | 1 | Nasdaq noise-area (`noise_area/`) | **Paper test running** (about 19 sessions, 5-30 Oct) | Nasdaq, intraday | Same market; run ALONE if adopted | Backtest-based; 4 weeks cannot prove profit | 30 Oct review, Parts A-C |
 | 2 | First-half-hour predicts last-half-hour (`intraday_momentum_last_half_hour/`) | **DROPPED 9 Oct**: in-sample screen run once, no predictor cleared the bar; two pointed the wrong way, the nearest (P2) missed at p about 0.07-0.09 | Nasdaq / S&P, trade at 15:30-16:00 | **None**: different hours | Was medium; effect not present after publication | None. Do not re-run. Held-out slice unused. |
-| 3 | Hour-of-day bias (`hour_of_day_bias/`) | Plan only (7 Oct) | Nasdaq / S&P, hours-long holds | Partly overlaps | Low; 22 windows, strict bar | Read-only screen; expect nothing |
+| 3 | Hour-of-day bias (`hour_of_day_bias/`) | **DROPPED 9 Oct**: in-sample screen run once, no window cleared the bar (best p about 0.02 at 23:00, chance level for 22 windows) | Nasdaq / S&P, hours-long holds | Partly overlaps | Was low; nothing found | None. Do not re-run. Held-out slice unused. |
 | 4 | Horner sweep-and-reverse, H1 (`horner_channel/`) | Plan FINAL and frozen (9 Oct); not run | Nasdaq / S&P, 09:30-12:00 | **Same hours, opposite direction**: a replacement, not a partner | Low | Run only after 30 Oct and a separate yes |
 | 5 | MCL oil breakout (`mcl_oil_breakout/`) | Plan only (5 Oct); no oil intraday data inspected | Oil; different market | Low (daily co-movement about -0.05) | Low; oil is event-driven | Data check; re-verify Lucid MCL approval |
 | 6 | Gold fix breakout (`gold_fix_breakout/`) | **Parked** | Gold, scheduled auctions | Low | Unknown | Needs a data purchase and a Lucid events check |
@@ -90,7 +90,7 @@ outside the bench.
    at the 30 Oct review).
 2. Candidate 2 was the first new screen: run 9 Oct and DROPPED (see table).
    The next candidate in order moves up.
-3. Candidate 3 only if cheap; low expected value.
+3. Candidate 3: run 9 Oct and DROPPED (see table).
 4. Candidate 4 as the replacement idea if the ORB fails at a checkpoint;
    do not run it beside the ORB.
 5. Candidates 5-7 stay parked until 1-4 resolve.
