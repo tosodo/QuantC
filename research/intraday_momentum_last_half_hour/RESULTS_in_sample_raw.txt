@@ -1,0 +1,56 @@
+NQ: cash-session days seen 1289; skips {'P1': 21, 'P2': 0, 'P3': 0, 'no_1530_1559': 45}
+ES: cash-session days seen 1289; skips {'P1': 21, 'P2': 0, 'P3': 0, 'no_1530_1559': 45}
+70/30 cutoff (decided on NQ valid-target dates, position only): in-sample through 2025-02-14
+
+==============================================================================
+NQ  IN-SAMPLE (through 2025-02-14)
+==============================================================================
+days with a valid 15:30-15:59 target: 870   always-long mean R_last: -0.45 bp (-0.75 pts)
+
+P1: n=854  mean sign*R = -1.873 bp  z=-1.72  one-sided p=0.9577  (bar 0.0167)
+    always-long mean -0.551 bp; slope t=-1.49; hit rate 48.2%
+    mean without top 3 days -2.369 bp; first half -3.259 bp, second half -0.487 bp
+    points per trade: gross -2.689, cost 0.2880, net -2.977  (net >= 2x cost: False; gross >= 2x cost: False)
+    checks: p<bar False | beats drift & slope t>2 False | top3/halves False | cost False
+
+P2: n=866  mean sign*R = +1.423 bp  z=+1.33  one-sided p=0.0921  (bar 0.0167)
+    always-long mean -0.431 bp; slope t=+5.40; hit rate 48.7%
+    mean without top 3 days +0.890 bp; first half +3.967 bp, second half -1.122 bp
+    points per trade: gross +1.857, cost 0.2880, net +1.569  (net >= 2x cost: True; gross >= 2x cost: True)
+    checks: p<bar False | beats drift & slope t>2 True | top3/halves False | cost True
+
+P3: n=869  mean sign*R = -1.434 bp  z=-1.34  one-sided p=0.9092  (bar 0.0167)
+    always-long mean -0.463 bp; slope t=-1.21; hit rate 47.5%
+    mean without top 3 days -1.889 bp; first half -2.008 bp, second half -0.860 bp
+    points per trade: gross -2.093, cost 0.2880, net -2.381  (net >= 2x cost: False; gross >= 2x cost: False)
+    checks: p<bar False | beats drift & slope t>2 False | top3/halves False | cost False
+
+==============================================================================
+ES  IN-SAMPLE (through 2025-02-14)
+==============================================================================
+days with a valid 15:30-15:59 target: 870   always-long mean R_last: -0.47 bp (-0.20 pts)
+
+P1: n=851  mean sign*R = -0.616 bp  z=-0.65  one-sided p=0.7434  (bar 0.0167)
+    always-long mean -0.404 bp; slope t=-2.06; hit rate 49.0%
+    mean without top 3 days -1.099 bp; first half -1.018 bp, second half -0.216 bp
+    points per trade: gross -0.288, cost 0.1152, net -0.403  (net >= 2x cost: False; gross >= 2x cost: False)
+    checks: p<bar False | beats drift & slope t>2 False | top3/halves False | cost False
+
+P2: n=855  mean sign*R = +1.392 bp  z=+1.49  one-sided p=0.0685  (bar 0.0167)
+    always-long mean -0.409 bp; slope t=+5.27; hit rate 50.2%
+    mean without top 3 days +0.928 bp; first half +3.100 bp, second half -0.313 bp
+    points per trade: gross +0.611, cost 0.1152, net +0.495  (net >= 2x cost: True; gross >= 2x cost: True)
+    checks: p<bar False | beats drift & slope t>2 True | top3/halves False | cost True
+
+P3: n=864  mean sign*R = -0.808 bp  z=-0.87  one-sided p=0.8076  (bar 0.0167)
+    always-long mean -0.443 bp; slope t=-2.14; hit rate 49.3%
+    mean without top 3 days -1.280 bp; first half -0.875 bp, second half -0.741 bp
+    points per trade: gross -0.367, cost 0.1152, net -0.482  (net >= 2x cost: False; gross >= 2x cost: False)
+    checks: p<bar False | beats drift & slope t>2 False | top3/halves False | cost False
+
+==============================================================================
+VERDICT (IN-SAMPLE (through 2025-02-14))
+==============================================================================
+P1: p-bar both=False  | drift+slope False | robust False | cost False  => CANDIDATE: False
+P2: p-bar both=False  | drift+slope True | robust False | cost True  => CANDIDATE: False
+P3: p-bar both=False  | drift+slope False | robust False | cost False  => CANDIDATE: False
