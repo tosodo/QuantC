@@ -41,19 +41,55 @@ Run `python3 research/orb_breakout/ops/risk_state.py`.
 
 ## 2. Data latency: must PASS
 
-Use `mcp-tv-get-alerts-log` (last 2 days) and look at the DEMO probe alerts
-("QC Trend DEMO test BUY/SELL (dry run)", MNQ1! 3m). They are 3m bars, so:
+Two independent measures. Use both when both are available.
 
-    lag = fired_at − (bar_time + 3 min)
+**A. Probe fires.** Use `mcp-tv-get-alerts-log` (last 2 days). A probe is
+any alert that can't place a real order: its name contains `DEMO` or
+`PAPER TEST ONLY`, or its message has `"test":true`. Never use the live
+alert's own fires. For each fire, use that alert's own `resolution`:
+
+    lag = fired_at − (bar_time + resolution)
+
+e.g. the DEMO probes ("QC Trend DEMO test BUY/SELL (dry run)", MNQ1! 3m) use
+3 min. The Noise-Area paper alert (MNQ1! 30m) uses 30 min.
 
 - Use the probe fires from the last 16 hours. On Monday, use the fires
-  since Sunday's 6pm ET reopen.
-- **PASS**: the median lag is ≤ 2 min.
-- **FAIL**: the median lag is > 2 min. The data is delayed and the tested
-  pass rates don't apply.
-- **FAIL (unknown)**: there are no probe fires in the window. No evidence
-  counts as a fail. Also check whether the probe alerts are still active or
-  have expired.
+  since Sunday's 6pm ET reopen. The 19–20 Sep 2026 feed lapse happened over
+  a weekend, so Friday's fires don't count.
+- Most of the evidence comes from the DEMO probes, which fire overnight. The
+  Noise-Area alert only fires during the regular session, so it's usually
+  outside the 16-hour window. Count it when it is inside.
+
+**B. Bar freshness.** Run `mcp-tv-get-ohlcv` on `CME_MINI:MES1!`, 1m,
+`count` 3. Compare the newest bar's open time `t` with the current time:
+
+    freshness = now − t   (the newest bar is still forming)
+
+- This measures the account's own CME data entitlement, which is the
+  subscription that lapsed in Sep 2026. On a live feed it's 0–60 s. On the
+  10-min delayed feed it's about 600 s or more.
+- Globex trades at 8:45 ET, so this works every weekday morning, including
+  Monday.
+- It's the MCP's view of the account's data, not the alert server's. That's
+  why A is preferred when it has fires.
+
+**Verdict.**
+
+- **PASS**: A's median lag is ≤ 2 min and B is ≤ 120 s. If A has no fires
+  in the window, B alone (≤ 120 s) is a PASS. Log it as `B only` in
+  `notes`, and say whether the probes are active or expired.
+- **FAIL**: A's median lag is > 2 min, or B is > 120 s. The data is delayed
+  and the tested pass rates don't apply.
+- **FAIL (unknown)**: A has no fires and B couldn't be measured (the
+  ohlcv call failed after retries). No evidence counts as a fail.
+
+Log A's median in `median_lag_s` and A's fire count in `probe_fires`. Put
+B's figure in `notes`, e.g. `fresh 5s`.
+
+The stale-data guard in the live script (see `SETUP_GUIDE.md`) is the
+per-trade backstop: it blocks an entry whose bar is more than 90 s late.
+This check is the daily one: it keeps the alert off on mornings when the
+feed is already known to be delayed.
 
 ## 3. Alert state: must PASS
 

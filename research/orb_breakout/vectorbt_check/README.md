@@ -1,5 +1,17 @@
 # vectorbt cross-check of the MES v2 backtest
 
+There are two rule sets:
+
+- `--rules s27` (the default) is the published RESULTS.md §2.7 baseline.
+- `--rules live` is what the live Pine script actually runs. That's the
+  same rules as `ops/shadow_day.py` and `live_rules_backtest.py`:
+  - it trades days where the range broke down first;
+  - the 90-min exit is re-checked on every bar;
+  - the stop is 125 pts;
+  - it exits on the 15:59 bar, with a catch-all exit for half-days.
+
+  P&L is gross of costs unless you pass `--rt-cost-usd`.
+
 `vbt_mes_v2.py` re-runs the locked MES v2 rules (RESULTS.md §2.7,
 `mes_final_run.py` config 4) on vectorbt's portfolio engine. The rules are
 re-implemented from their written description, not by importing
@@ -54,6 +66,28 @@ backtest does.
 
 Eight days is far too few to say anything about the edge. This check confirms
 that both implementations agree, not that the strategy works.
+
+### Live rules (added 2026-10-14)
+
+```bash
+.venv/bin/python vbt_mes_v2.py --csv ../data/continuous/ES.csv --rules live --compare
+.venv/bin/python vbt_mes_v2.py --csv ../data/continuous/ES.csv --rules live --rt-cost-usd 2.50
+```
+
+- **`--compare`:** diffs every trade against `ops/shadow_day.py`'s
+  `replay_day`. That's the same replay the close routine and
+  `live_rules_backtest.py` use. It passes the same stop to both sides.
+- **Output:** it also splits the results by whether the range broke down
+  first. That's the untested question from Phase 3.
+- **`--rt-cost-usd`:** a sensitivity run, because the real MES round-turn
+  cost isn't confirmed from Tradovate fills yet.
+
+**On the TradingView bars for 5–14 Oct:**
+
+- 6 trades and 0 mismatches against `shadow_day.py`. Gross +$73.75, which
+  equals the journal's `signal_pnl` column exactly, 7 Oct included.
+- The stop path was also exercised at 5, 10, 20 and 40 pts, with 0
+  mismatches each.
 
 ## Known engine difference
 

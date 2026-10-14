@@ -168,7 +168,9 @@ Claude routine runs every weekday at **8:45 ET** and follows
 [`ops/GO_NO_GO.md`](ops/GO_NO_GO.md). It replaces the one-off Monday
 check-in. The criteria:
 
-- **Data latency (must pass):** the DEMO probe lag must be ≤ 2 min.
+- **Data latency (must pass):** the probe alerts' lag must be ≤ 2 min, and
+  the newest MES 1m bar must be ≤ 120 s old. Bar freshness alone is enough
+  when no probe fired (see GO_NO_GO.md check 2).
 - **Alert (must pass):** exactly one MES v2 alert exists, with no
   duplicates.
 - **Expiry:** fails if the alert expires today; warns at ≤ 10 days left.
