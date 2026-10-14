@@ -30,12 +30,12 @@ def num(s):
     return float(s) if s not in (None, "") else None
 
 
-def load(name):
-    with open(os.path.join(HERE, name)) as f:
-        return list(csv.DictReader(f))
+def evaluate(asof, ops_dir=HERE):
+    """Returns the figures as a dict. ops_dir lets the tests use their own CSVs."""
+    def load(name):
+        with open(os.path.join(ops_dir, name)) as f:
+            return list(csv.DictReader(f))
 
-
-def main(asof):
     rows = sorted(load("journal.csv"), key=lambda r: r["date"])
     rows = [r for r in rows if r["date"] <= asof]
     live = [r for r in rows if r["status"] == "live"]
@@ -116,7 +116,7 @@ def main(asof):
     if bad_qty:
         tripped.append("R5_size")
 
-    print(json.dumps({
+    return {
         "asof": asof,
         "consecutive_stops": consec,
         "week_start": monday,
@@ -131,8 +131,14 @@ def main(asof):
         "buffer_trip_level": min_buffer,
         "avg_slippage": avg_slip,
         "slippage_trades": len(slips),
+        "buffer_anchor_age_days": (date.fromisoformat(asof)
+                                   - date.fromisoformat(snap["date"])).days,
         "tripped": tripped,
-    }))
+    }
+
+
+def main(asof):
+    print(json.dumps(evaluate(asof)))
 
 
 if __name__ == "__main__":
