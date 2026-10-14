@@ -1,0 +1,63 @@
+# vectorbt cross-check of the MES v2 backtest
+
+`vbt_mes_v2.py` re-runs the locked MES v2 rules (RESULTS.md §2.7,
+`mes_final_run.py` config 4) on vectorbt's portfolio engine. The rules are
+re-implemented from their written description, not by importing
+`orb_test.py` or `mes_final_run.py`. If either implementation has a bug, the
+two disagree. vectorbt handles the fills, the stop, fees and P&L; the script
+only builds the signals.
+
+## Setup
+
+```bash
+cd research/orb_breakout/vectorbt_check
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+- Everything in `requirements.txt` is pinned. vectorbt is pinned at 1.1.2.
+- `pip-audit` reported no known vulnerabilities on 2026-10-14.
+- Keep it in its own venv: vectorbt needs numpy ≥ 2.4 and pandas 3.
+- Never load pickle/dill files from untrusted sources with vectorbt's
+  `load()`.
+
+## Run
+
+Full 5-year re-run: this needs the gitignored Databento data, so run it on the
+machine that has `data/continuous/ES.csv`.
+
+```bash
+.venv/bin/python vbt_mes_v2.py --csv ../data/continuous/ES.csv --compare
+```
+
+- **Configs:** it prints configs 1–4: no exit, stop only, 90-min exit only,
+  and stop + 90-min.
+- **ruin.py:** where `ruin.py` is installed, each config also gets its PASS
+  rate. Compare these with RESULTS.md §2.7, for example 77.82% for config 4
+  with no slippage.
+- **Comparison:** `--compare` diffs every trade against `mes_final_run.py`
+  and exits 1 on any mismatch.
+- **Not modelled:** the slippage configs (6–7) are not reproduced here.
+
+## Results so far (2026-10-14)
+
+The full history isn't in this repo, so the first check used TradingView's
+available 1-minute `CME_MINI:MES1!` bars, from 5 to 14 Oct 2026. That is
+8 sessions and 5 trades; 7 Oct was skipped as down-break-first, as the
+backtest does.
+
+- **Locked v2, stop 124.75 pts:** 0 mismatches against `mes_final_run.py`.
+  Net +$30.87 after costs, which agrees with the journal's shadow rows.
+- **Stop path:** the stop never triggered in this window. To exercise it, the
+  comparison was also run at 5, 10, 20 and 40 pts, with 0 mismatches each.
+  These were plumbing tests, not results.
+
+Eight days is far too few to say anything about the edge. This check confirms
+that both implementations agree, not that the strategy works.
+
+## Known engine difference
+
+When a bar opens beyond the stop, vectorbt's `StopLimit` fills at that bar's
+open. `mes_final_run.py` always fills at the stop level. Within regular
+trading hours a gap through a 125-pt stop is very rare. If the 5-year run
+reports a mismatch on a stop day, check this first.
