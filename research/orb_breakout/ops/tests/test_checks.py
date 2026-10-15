@@ -11,7 +11,6 @@ LIVE_OLD = ("QuantC ORB Long MES v2 (validated) - Ghost (Accessible) "
 LIVE_NEW = ("QuantC ORB Long MES v2 (validated) - Ghost (Accessible) "
             "(1, 625, 90, 300, 90, Top Right, 20, Large, 3): Any alert() function call")
 DEMO_BUY = "QC Trend DEMO test BUY (dry run)"
-NOISE = "QuantC Noise-Area MNQ - PAPER TEST ONLY: Any alert() function call"
 
 
 def T(s):
@@ -74,57 +73,22 @@ def test_missing_live_alert():
         == "no_live_alert"
 
 
-# --- latency ------------------------------------------------------------------
-REAL_DEMO_1OCT = [  # real fires, 1 Oct 2026, exactly on bar close (0 s lag)
-    ev(DEMO_BUY, "2026-10-01T17:18:00Z", "2026-10-01T17:21:00Z", {"action": "buy", "test": True}, "3"),
-    ev(DEMO_BUY, "2026-10-01T19:48:00Z", "2026-10-01T19:51:00Z", {"action": "buy", "test": True}, "3"),
-    ev(DEMO_BUY, "2026-10-02T01:09:00Z", "2026-10-02T01:12:00Z", {"action": "buy", "test": True}, "3"),
-]
-
-
-def test_live_feed_probes_pass():
-    lat = checks.latency(REAL_DEMO_1OCT, None, T("2026-10-02T12:45:00Z"))
-    assert lat["status"] == "PASS" and lat["median_lag_s"] == 0 and lat["probe_fires"] == 1  # 17:21 and 19:51 are >16 h old
+# --- latency (bar freshness) --------------------------------------------------
+def test_fresh_bars_pass():
+    ohlcv = {"bars": {"t": [1792021320, 1792021380]}}       # real, 14 Oct 23:42-23:43 UTC
+    lat = checks.latency(ohlcv, datetime.fromtimestamp(1792021385, timezone.utc))
+    assert lat == {"freshness_s": 5, "status": "PASS"}
 
 
 def test_delayed_feed_fails():
-    delayed = [ev(DEMO_BUY, "2026-09-22T10:00:00Z", "2026-09-22T10:13:00Z", {"test": True}, "3")]
-    assert checks.latency(delayed, None, T("2026-09-22T12:45:00Z"))["status"] == "FAIL"
-
-
-def test_freshness_alone_passes_when_probes_paused():
-    ohlcv = {"bars": {"t": [1792021320, 1792021380]}}       # real, 14 Oct 23:42-23:43 UTC
-    lat = checks.latency([], ohlcv, datetime.fromtimestamp(1792021385, timezone.utc))
-    assert lat == {"median_lag_s": None, "probe_fires": 0, "freshness_s": 5,
-                   "status": "PASS", "note": "B only"}
-
-
-def test_stale_bars_fail_even_with_good_probes():
-    ohlcv = {"bars": [{"t": 1792021380 - 660}]}
-    lat = checks.latency(REAL_DEMO_1OCT, ohlcv, datetime.fromtimestamp(1792021385, timezone.utc))
-    assert lat["status"] == "FAIL"
+    ohlcv = {"bars": [{"t": 1792021380 - 660}]}             # ~11 min old: the Sep 2026 delayed feed
+    lat = checks.latency(ohlcv, datetime.fromtimestamp(1792021385, timezone.utc))
+    assert lat["status"] == "FAIL" and lat["freshness_s"] == 665
 
 
 def test_no_evidence_is_fail_unknown():
-    assert checks.latency([], None, T("2026-10-15T12:45:00Z"))["status"] == "FAIL_UNKNOWN"
-
-
-def test_live_alert_fires_never_count_as_probes():
-    e = ev(LIVE_OLD, "2026-10-14T13:45:00Z", "2026-10-14T14:15:00Z", {"action": "buy", "test": True})
-    assert checks.probe_lags([e], T("2026-10-14T16:00:00Z")) == []
-
-
-def test_noise_area_probe_uses_its_own_30m_resolution():
-    e = ev(NOISE, "2026-10-14T19:30:00Z", "2026-10-14T20:00:00Z",
-           {"action": "exit", "test": True}, "30")
-    assert checks.probe_lags([e], T("2026-10-15T11:00:00Z")) == [0.0]
-
-
-def test_monday_window_starts_sunday_6pm_et():
-    friday = ev(DEMO_BUY, "2026-10-16T19:00:00Z", "2026-10-16T19:03:00Z", {"test": True}, "3")
-    sunday = ev(DEMO_BUY, "2026-10-18T23:00:00Z", "2026-10-18T23:03:00Z", {"test": True}, "3")
-    lags = checks.probe_lags([friday, sunday], T("2026-10-19T12:45:00Z"))
-    assert lags == [0.0]
+    assert checks.latency(None, T("2026-10-15T12:45:00Z"))["status"] == "FAIL_UNKNOWN"
+    assert checks.latency({"bars": []}, T("2026-10-15T12:45:00Z"))["status"] == "FAIL_UNKNOWN"
 
 
 # --- verdict ------------------------------------------------------------------
@@ -133,14 +97,14 @@ FRESH = {"bars": {"t": [int(T("2026-10-19T12:44:00Z").timestamp())]}}
 
 
 def test_go_before_open_ensures_active(tmp_path):
-    out = checks.gonogo([alert(9, LIVE_NEW, False)], [], FRESH, T("2026-10-19T12:45:00Z"),
+    out = checks.gonogo([alert(9, LIVE_NEW, False)], FRESH, T("2026-10-19T12:45:00Z"),
                         ops_dir=str(tmp_path), risk=GOOD_RISK)
     assert out["verdict"] == "GO" and out["action"] == {"do": "ensure_active", "alert_ids": [9]}
 
 
 def test_risk_pause_file_is_no_go_and_stops(tmp_path):
     (tmp_path / "RISK_PAUSE").write_text("rule: R5_size\n")
-    out = checks.gonogo([alert(9, LIVE_NEW, True)], [], FRESH, T("2026-10-19T12:45:00Z"),
+    out = checks.gonogo([alert(9, LIVE_NEW, True)], FRESH, T("2026-10-19T12:45:00Z"),
                         ops_dir=str(tmp_path), risk=GOOD_RISK)
     assert out["verdict"] == "NO-GO" and out["action"]["do"] == "ensure_stopped"
     assert out["action"]["alert_ids"] == [9]
@@ -148,44 +112,43 @@ def test_risk_pause_file_is_no_go_and_stops(tmp_path):
 
 def test_hold_is_no_go(tmp_path):
     (tmp_path / "HOLD").write_text("user hold\n")
-    out = checks.gonogo([alert(9, LIVE_NEW, False)], [], FRESH, T("2026-10-19T12:45:00Z"),
+    out = checks.gonogo([alert(9, LIVE_NEW, False)], FRESH, T("2026-10-19T12:45:00Z"),
                         ops_dir=str(tmp_path), risk=GOOD_RISK)
     assert out["fails"] == ["hold"]
 
 
-def test_silent_and_expiring_probes_warn_but_never_block(tmp_path):
-    # The real 15 Oct state: both DEMO probes active, last fired 2 Oct, expire 21 Oct.
+def test_retired_probes_have_no_effect(tmp_path):
+    # The DEMO probes left on the account on 15 Oct (silent, expiring) change nothing.
     now = T("2026-10-15T12:45:00Z")
-    probes = [dict(alert(5662901850, "QC Trend DEMO test BUY (dry run)", True,
-                         exp="2026-10-21T15:09:13Z"), last_fire_time="2026-10-02T12:33:00Z"),
-              dict(alert(5662914432, "QC Trend DEMO test SELL (dry run)", True,
+    probes = [dict(alert(5662914432, "QC Trend DEMO test SELL (dry run)", True,
                          exp="2026-10-21T15:11:10Z"), last_fire_time="2026-10-02T15:09:00Z")]
     fresh = {"bars": {"t": [int(T("2026-10-15T12:44:30Z").timestamp())]}}
-    out = checks.gonogo([alert(9, LIVE_NEW, False)] + probes, [], fresh, now,
+    out = checks.gonogo([alert(9, LIVE_NEW, False)] + probes, fresh, now,
                         ops_dir=str(tmp_path), risk=GOOD_RISK)
-    assert out["verdict"] == "GO" and out["latency"]["note"] == "B only"
-    assert out["warn"] == ["probe_silent_5662901850", "probe_expires_2026-10-21_5662901850",
-                           "probe_silent_5662914432", "probe_expires_2026-10-21_5662914432"]
+    assert out["verdict"] == "GO" and out["warn"] == []
 
 
-def test_healthy_probe_no_warn_and_expired_probe_ignored():
-    now = T("2026-10-19T12:45:00Z")
-    ok = dict(alert(1, "QC Trend DEMO test BUY (dry run)", True), last_fire_time="2026-10-19T09:00:00Z")
-    gone = dict(alert(2, "QC Trend DEMO test SELL (dry run)", False, exp="2026-10-18T00:00:00Z"))
-    paper = alert(3, "QuantC Noise-Area MNQ - PAPER TEST ONLY", True)   # session-only, not a DEMO probe
-    assert checks.probe_health([ok, gone, paper], now) == []
-    off = alert(4, "QC Trend DEMO test SELL (dry run)", False)
-    assert checks.probe_health([off], now) == ["probe_inactive_4"]
+def test_expiring_live_alert_warns_but_goes(tmp_path):
+    out = checks.gonogo([alert(9, LIVE_NEW, False, exp="2026-10-25T00:00:00Z")], FRESH,
+                        T("2026-10-19T12:45:00Z"), ops_dir=str(tmp_path), risk=GOOD_RISK)
+    assert out["verdict"] == "GO" and out["warn"] == ["alert_expires_within_10_days"]
+
+
+def test_stale_bars_are_no_go(tmp_path):
+    stale = {"bars": {"t": [int(T("2026-10-19T12:34:00Z").timestamp())]}}
+    out = checks.gonogo([alert(9, LIVE_NEW, True)], stale, T("2026-10-19T12:45:00Z"),
+                        ops_dir=str(tmp_path), risk=GOOD_RISK)
+    assert out["fails"] == ["latency_fail"] and out["action"]["do"] == "ensure_stopped"
 
 
 def test_never_touch_after_open(tmp_path):
-    out = checks.gonogo([alert(9, LIVE_NEW, False)], [], FRESH, T("2026-10-19T13:31:00Z"),
+    out = checks.gonogo([alert(9, LIVE_NEW, False)], FRESH, T("2026-10-19T13:31:00Z"),
                         ops_dir=str(tmp_path), risk=GOOD_RISK)
     assert out["action"]["do"] == "none"
 
 
 def test_duplicates_stop_even_after_open(tmp_path):
-    out = checks.gonogo([alert(1, LIVE_OLD, True), alert(2, LIVE_NEW, True)], [], FRESH,
+    out = checks.gonogo([alert(1, LIVE_OLD, True), alert(2, LIVE_NEW, True)], FRESH,
                         T("2026-10-19T14:00:00Z"), ops_dir=str(tmp_path), risk=GOOD_RISK)
     assert out["action"]["do"] == "stop" and out["action"]["urgent"] is True
 

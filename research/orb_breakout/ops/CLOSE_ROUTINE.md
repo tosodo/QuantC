@@ -75,10 +75,10 @@ output as JSON, then run:
 
     git show origin/main:research/orb_breakout/ops/checks.py > $S/checks.py
     python3 -I $S/checks.py close --alerts $S/alerts.json --log $S/log.json \
-        --shadow $S/shadow.json --date YYYY-MM-DD [--morning-lag-s N]
+        --shadow $S/shadow.json --date YYYY-MM-DD [--morning-fresh-s N]
 
-- **`--morning-lag-s`:** this morning's `median_lag_s` from
-  `golive_log.csv`, if it has one.
+- **`--morning-fresh-s`:** this morning's bar freshness, the `fresh Ns`
+  figure in today's `golive_log.csv` notes, if it has one.
 - **The output gives:** `status`, `flags` (any `URGENT_*` goes first in the
   report), `notes`, `buy_lag_s`, `exit_lag_s`, `qty` and `alert_active`.
   Copy them into the journal row.

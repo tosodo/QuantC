@@ -18,7 +18,7 @@ Opened 2026-10-14. Live trading has been paused (R5) since 30 Sep.
 |---|---|---|---|
 | 1 | Live alert (Pine script on TradingView) | **not ready** | yes |
 | 2 | Kill switch and alert control | **not ready** | yes |
-| 3 | Market data feed and latency | partial | no |
+| 3 | Market data feed and latency | ready | no |
 | 4 | Execution: Ghost → Tradovate | **not ready** | yes |
 | 5 | Risk engine (`risk_state.py`) | partial | no |
 | 6 | Routines (8:45, 9:50, 4:15, Friday) | partial | no |
@@ -84,31 +84,16 @@ Live trading should resume only when every **blocking** row is ready.
 
 ## 3. Market data feed and latency
 
-**Gaps**
-- **G3.1 Unreliable probes.** Both DEMO probes (5662901850, 5662914432)
-  showed active but fired nothing from 2 to 14 Oct; before that they fired
-  several times a day. BUY fired again on 15 Oct at 00:36Z; SELL is still
-  silent. While they're silent, check 2A has no evidence and the latency
-  verdict rests on B (bar freshness) alone.
-  They expire **21 Oct**. They carry a webhook, so only the user can
-  recreate them: the MCP can't create webhook alerts, and restarting them
-  from a routine isn't permitted.
-
 **In place**
-- The latency check has two independent measures, probe lag and MES bar
-  freshness (PR #15).
-- The verdict is coded and tested (`checks.py latency`).
-- The 8:45 check reports silent, inactive or expiring probes as a `warn`
-  (`probe_silent_<id>`, `probe_inactive_<id>`, `probe_expires_<date>_<id>`).
-  These never block the verdict.
-
-**Fixes**
-- **G3.1 (user):** recreate both probes with a far-out expiry when you
-  deploy the guard alert.
-- **Backstop:** the live alert's stale guard blocks any late entry on each trade.
-
-**Done when** the probes have more than 30 days to expiry and the 8:45 check
-shows no `probe_` warn.
+- **Daily:** the 8:45 check measures MES 1m bar freshness and is NO-GO
+  above 120 s, which catches a lapsed or delayed CME feed
+  (`checks.py latency`, tested).
+- **Per trade:** the live script's stale guard measures the breakout bar's
+  lag inside TradingView's alert engine and blocks an entry more than 90 s
+  late.
+- No separate latency probe alerts: retired 15 Oct 2026 (D-018). The guard
+  measures what they measured, at the moment of the trade, with nothing to
+  keep alive.
 
 ## 4. Execution: Ghost → Tradovate
 

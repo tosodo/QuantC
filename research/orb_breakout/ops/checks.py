@@ -5,10 +5,10 @@ JSON file. This script turns those files into the verdict, so the decision
 is the same every time and is covered by tests (tests/test_checks.py).
 Claude still runs the MCP calls and takes the action the output names.
 
-    python3 ops/checks.py gonogo --alerts alerts.json --log log.json \
+    python3 ops/checks.py gonogo --alerts alerts.json \
         [--ohlcv mes.json] [--now 2026-10-15T12:45:00Z] [--ops-dir DIR]
     python3 ops/checks.py close --alerts alerts.json --log log.json \
-        --shadow shadow.json --date 2026-10-15
+        --shadow shadow.json --date 2026-10-15 [--morning-fresh-s N]
     python3 ops/checks.py watch --alerts alerts.json --log log.json \
         [--now ...] [--ops-dir DIR]          # 9:50 ET read-only watch (WATCH.md)
 
@@ -30,9 +30,7 @@ ET = ZoneInfo("America/New_York")
 
 LIVE_NAME = "QuantC ORB Long MES v2 (validated) - Ghost (Accessible)"
 GUARD_DEPLOYED = "2026-09-26"   # alerts created on/after this run the stale-data guard
-PROBE_WINDOW_H = 16
-MAX_PROBE_LAG_S = 120           # check 2A: median probe lag
-MAX_FRESHNESS_S = 120           # check 2B: age of the newest MES 1m bar
+MAX_FRESHNESS_S = 120           # check 2: age of the newest MES 1m bar
 EXPIRY_WARN_DAYS = 10
 LATE_FIRE_S = 90                # close check item 6
 TICK = 0.25
@@ -104,67 +102,9 @@ def audit_alerts(alerts, now):
 
 
 # --------------------------------------------------------------------------
-# go/no-go check 2: data latency
+# go/no-go check 2: data latency (bar freshness; the DEMO probes were retired
+# in D-018 - the live script's stale guard measures lag on every entry)
 # --------------------------------------------------------------------------
-def probe_window_start(now):
-    n = now.astimezone(ET)
-    if n.weekday() == 0:   # Monday: since Sunday's 6pm ET reopen
-        sun = n.date() - timedelta(days=1)
-        return datetime.combine(sun, time(18, 0), ET)
-    return now - timedelta(hours=PROBE_WINDOW_H)
-
-
-def is_probe(e):
-    name = e.get("name") or ""
-    if is_live(name):
-        return False
-    return "DEMO" in name or "PAPER TEST ONLY" in name or msg(e).get("test") is True
-
-
-def probe_lags(events, now):
-    start = probe_window_start(now)
-    lags = []
-    for e in events:
-        if not is_probe(e) or not str(e.get("resolution", "")).isdigit():
-            continue
-        fired = ts(e["fired_at"])
-        if not (start <= fired <= now):
-            continue
-        bar_close = ts(e["bar_time"]) + timedelta(minutes=int(e["resolution"]))
-        lags.append((fired - bar_close).total_seconds())
-    return sorted(lags)
-
-
-def probe_health(alerts, now):
-    """Non-blocking WARNs about the DEMO latency probes (G3.1). A probe that
-    shows active but hasn't fired inside the latency window is silent: check
-    2A then has no evidence and the verdict rests on B alone."""
-    start = probe_window_start(now)
-    warn = []
-    for a in alerts:
-        if "DEMO" not in (a.get("name") or "") or is_live(a.get("name")):
-            continue
-        aid = a["alert_id"]
-        exp = ts(a["expiration"]) if a.get("expiration") else None
-        if exp is not None and exp <= now:
-            continue                       # expired: nothing to warn about
-        last = ts(a["last_fire_time"]) if a.get("last_fire_time") else None
-        if not a.get("active"):
-            warn.append(f"probe_inactive_{aid}")
-        elif last is None or last < start:
-            warn.append(f"probe_silent_{aid}")
-        if exp is not None and (exp - now) <= timedelta(days=EXPIRY_WARN_DAYS):
-            warn.append(f"probe_expires_{iso(exp)[:10]}_{aid}")
-    return warn
-
-
-def median(xs):
-    n = len(xs)
-    if not n:
-        return None
-    return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
-
-
 def last_bar_open(ohlcv):
     bars = ohlcv.get("bars")
     if isinstance(bars, dict):
@@ -174,23 +114,14 @@ def last_bar_open(ohlcv):
     return None
 
 
-def latency(events, ohlcv, now):
-    lags = probe_lags(events, now)
-    med = median(lags)
+def latency(ohlcv, now):
     t = last_bar_open(ohlcv) if ohlcv else None
     fresh = round(now.timestamp() - t) if t is not None else None
-    out = {"median_lag_s": med, "probe_fires": len(lags), "freshness_s": fresh}
-    a_bad = med is not None and med > MAX_PROBE_LAG_S
-    b_bad = fresh is not None and fresh > MAX_FRESHNESS_S
-    if a_bad or b_bad:
-        out["status"] = "FAIL"
-    elif med is None and fresh is None:
-        out["status"] = "FAIL_UNKNOWN"
+    if fresh is None:
+        status = "FAIL_UNKNOWN"
     else:
-        out["status"] = "PASS"
-        if med is None:
-            out["note"] = "B only"
-    return out
+        status = "FAIL" if fresh > MAX_FRESHNESS_S else "PASS"
+    return {"freshness_s": fresh, "status": status}
 
 
 # --------------------------------------------------------------------------
@@ -202,12 +133,12 @@ def risk_state(asof, ops_dir=HERE):
     return rs.evaluate(asof, ops_dir)
 
 
-def gonogo(alerts, events, ohlcv, now, ops_dir=HERE, risk=None):
+def gonogo(alerts, ohlcv, now, ops_dir=HERE, risk=None):
     asof = now.astimezone(ET).date().isoformat()
     hold = os.path.exists(os.path.join(ops_dir, "HOLD"))
     pause = os.path.exists(os.path.join(ops_dir, "RISK_PAUSE"))
     risk = risk if risk is not None else risk_state(asof, ops_dir)
-    lat = latency(events, ohlcv, now)
+    lat = latency(ohlcv, now)
     alert = audit_alerts(alerts, now)
 
     fails = []
@@ -220,9 +151,7 @@ def gonogo(alerts, events, ohlcv, now, ops_dir=HERE, risk=None):
     if alert["status"] not in ("PASS", "WARN"):
         fails.append("alert_" + alert.get("reason", alert["status"].lower()))
     verdict = "GO" if not fails else "NO-GO"
-    warn = probe_health(alerts, now)
-    if alert["status"] == "WARN":
-        warn.append("alert_" + alert.get("reason", "warn"))
+    warn = ["alert_" + alert.get("reason", "warn")] if alert["status"] == "WARN" else []
 
     after_open = now.astimezone(ET).time() >= time(9, 30)
     if alert["status"] == "FAIL_URGENT":
@@ -251,7 +180,7 @@ def plus_1min(hhmm):
     return (datetime(2000, 1, 1, h, m) + timedelta(minutes=1)).strftime("%H:%M")
 
 
-def reconcile(events, shadow, day, alert_active, morning_lag_s=None):
+def reconcile(events, shadow, day, alert_active, morning_fresh_s=None):
     todays = [e for e in events if is_live(e.get("name"))
               and ts(e["fired_at"]).astimezone(ET).date().isoformat() == day]
     todays.sort(key=lambda e: e["fired_at"])
@@ -274,7 +203,7 @@ def reconcile(events, shadow, day, alert_active, morning_lag_s=None):
 
     buy = buys[0] if buys else None
     if shadow_entry and not buy:
-        if alert_active and morning_lag_s is not None and morning_lag_s > LATE_FIRE_S:
+        if alert_active and morning_fresh_s is not None and morning_fresh_s > LATE_FIRE_S:
             notes.append("entry missed - stale guard most likely blocked it (expected)")
             status = "stale_skip"
         elif alert_active:
@@ -400,7 +329,6 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("gonogo")
     g.add_argument("--alerts", required=True)
-    g.add_argument("--log", required=True)
     g.add_argument("--ohlcv")
     g.add_argument("--now")
     g.add_argument("--ops-dir", default=HERE,
@@ -411,7 +339,7 @@ def main(argv=None):
     c.add_argument("--log", required=True)
     c.add_argument("--shadow", required=True)
     c.add_argument("--date", required=True)
-    c.add_argument("--morning-lag-s", type=float)
+    c.add_argument("--morning-fresh-s", type=float)
     w = sub.add_parser("watch")
     w.add_argument("--alerts", required=True)
     w.add_argument("--log", required=True)
@@ -420,18 +348,18 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     alerts = load(a.alerts).get("alerts", [])
-    events = load(a.log).get("events", [])
+    events = load(a.log).get("events", []) if a.cmd != "gonogo" else []
     if a.cmd == "gonogo":
         now = ts(a.now) if a.now else datetime.now(timezone.utc)
         ohlcv = load(a.ohlcv) if a.ohlcv else None
-        out = gonogo(alerts, events, ohlcv, now, ops_dir=a.ops_dir)
+        out = gonogo(alerts, ohlcv, now, ops_dir=a.ops_dir)
     elif a.cmd == "watch":
         now = ts(a.now) if a.now else datetime.now(timezone.utc)
         out = watch(alerts, events, now, ops_dir=a.ops_dir)
     else:
         live = [x for x in alerts if is_live(x.get("name"))]
         active = any(x.get("active") for x in live)
-        out = reconcile(events, load(a.shadow), a.date, active, a.morning_lag_s)
+        out = reconcile(events, load(a.shadow), a.date, active, a.morning_fresh_s)
         out["alert_active"] = active if live else "missing"
     print(json.dumps(out))
     return 0
