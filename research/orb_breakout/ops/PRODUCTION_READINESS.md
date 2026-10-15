@@ -88,10 +88,11 @@ Live trading should resume only when every **blocking** row is ready.
 ## 3. Market data feed and latency
 
 **Gaps**
-- **G3.1 Silent probes.** Both DEMO probes (5662901850, 5662914432) show
-  active, but neither has fired since 2 Oct. Before that they fired several
-  times a day. The 14 Oct restart didn't bring them back, so check 2A has
-  no evidence and the latency verdict rests on B (bar freshness) alone.
+- **G3.1 Unreliable probes.** Both DEMO probes (5662901850, 5662914432)
+  showed active but fired nothing from 2 to 14 Oct; before that they fired
+  several times a day. BUY fired again on 15 Oct at 00:36Z; SELL is still
+  silent. While they're silent, check 2A has no evidence and the latency
+  verdict rests on B (bar freshness) alone.
   They expire **21 Oct**. They carry a webhook, so only the user can
   recreate them: the MCP can't create webhook alerts, and restarting them
   from a routine isn't permitted.

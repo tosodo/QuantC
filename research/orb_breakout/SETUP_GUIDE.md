@@ -21,9 +21,8 @@ What went wrong and what it taught us is in [`docs/incidents/`](../../docs/incid
 | alert | id | symbol | state |
 |---|---|---|---|
 | QuantC ORB Long MES v2 (validated) - Ghost (Accessible) | 5571966155 | MES1! 1m | **Inactive. Must be replaced, not restarted:** it's the 9 Sep build with no stale-data guard and qty input 2. The 8:45 check fails it. Expires 25 Nov. |
-| QC Trend DEMO test BUY / SELL (dry run) | 5662901850 / 5662914432 | MNQ1! 3m | Latency probes, `"test":true` so no orders. Show active but **silent since 2 Oct**: recreate them. **Expire 21 Oct.** |
+| QC Trend DEMO test BUY / SELL (dry run) | 5662901850 / 5662914432 | MNQ1! 3m | Latency probes, `"test":true` so no orders. Both silent 2–14 Oct; BUY fired again 15 Oct 00:36Z, SELL still silent. **Expire 21 Oct**: recreate both. |
 | QuantC Noise-Area MNQ - PAPER TEST ONLY | 5760603790 | MNQ1! 30m | Active, `"test":true`, paper only. Expires 2 Dec. |
-| v1 "Ghost alerts" (MES and MNQ) and the MNQ OR-width-stop draft | 5461765534, 5490124255, 5478843448 | 1m | Inactive and expired. MNQ isn't traded. |
 
 ## The live script
 

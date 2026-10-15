@@ -12,6 +12,9 @@ it implements.
   expiring latency probes (the DEMO probes show active but haven't fired
   since 2 Oct). Pinned `research/orb_breakout/requirements.txt` (closes
   G8.1). Readiness register, GO_NO_GO and SETUP_GUIDE brought in line.
+  Deleted the three expired v1/MNQ alerts (5461765534, 5490124255,
+  5478843448) at the user's request. They were inactive; their scripts
+  are kept in `archive/research/orb_breakout/pine/`.
 - **#18** Documentation policy (D-016). Root README with a map of live
   documents; `archive/` with the old SETUP_GUIDE (verbatim) and the 5
   retired Pine scripts; changelog, decision log and incident records;
