@@ -61,7 +61,8 @@ At the 4:15 close routine, after the trades. Nothing was watching between
 ## Open items
 - **G2.1:** find the cause. Check TradingView login history and devices,
   then change the password and turn on 2FA.
-- **G1.1:** replace 5571966155 with a guarded alert at qty 1.
+- **G1.1:** done 15 Oct 2026. 5571966155 was replaced by 5849779220 (qty 1,
+  stale guard on) and deleted. The go/no-go alert audit passes.
 - **G4.3:** Lucid P&L for 30 Sep and 2 Oct.
 
 ## Evidence

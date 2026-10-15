@@ -15,6 +15,9 @@ it implements.
   Deleted the three expired v1/MNQ alerts (5461765534, 5490124255,
   5478843448) at the user's request. They were inactive; their scripts
   are kept in `archive/research/orb_breakout/pine/`.
+  **Closes G1.1:** the user redeployed `orb_long_mes_v2.pine` as alert
+  5849779220 (qty 1, stale guard on, expires 14 Dec), Claude stopped it
+  and deleted the 9 Sep qty-2 alert 5571966155.
 - **#18** Documentation policy (D-016). Root README with a map of live
   documents; `archive/` with the old SETUP_GUIDE (verbatim) and the 5
   retired Pine scripts; changelog, decision log and incident records;

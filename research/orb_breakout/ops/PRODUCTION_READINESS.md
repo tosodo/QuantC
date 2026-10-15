@@ -29,10 +29,14 @@ Live trading should resume only when every **blocking** row is ready.
 
 ## 1. Live alert
 
+**In place**
+- Alert 5849779220, created 15 Oct 2026 01:30Z from the repo's
+  `orb_long_mes_v2.pine`: qty 1, test mode off, $625, 90 min, stale guard
+  on at 90 s, Ghost webhook, expires 14 Dec. Left stopped; the 8:45 check
+  starts it on a GO day. The 9 Sep qty-2 build (5571966155) is deleted.
+  The go/no-go alert audit passes (closes G1.1).
+
 **Gaps**
-- **G1.1 Wrong build.** Alert 5571966155 is the 9 Sep build. It has no
-  stale-data guard and qty 2, so each stop risks $1,250 instead of the
-  tested $625. It caused R5 on 30 Sep and 2 Oct.
 - **G1.2 Untested rule: down-break-first days.** The live script trades
   days where price broke below the range first. The 77.8% research
   skipped those days. `live_rules_backtest.py` answers this, but its
@@ -43,11 +47,6 @@ Live trading should resume only when every **blocking** row is ready.
   `mes_c1_stop_rerun.py`, aren't in the repo.
 
 **Fixes**
-- **G1.1 (user, outside market hours):** follow `SETUP_GUIDE.md` →
-  "Replacing the live alert". Create the guard alert at qty 1 with the same Ghost
-  webhook and a far-out expiry, then delete 5571966155. `checks.py` now
-  fails the go/no-go for any live-named alert that has qty ≠ 1 or predates
-  the guard, so the old alert can't trade again.
 - **G1.2 (user + Claude):** run `live_rules_backtest.py >
   phase3_report.md` on the machine with the data, then commit the report
   and `phase3_trades.csv`. Then decide on down-break-first days: keep
@@ -56,8 +55,6 @@ Live trading should resume only when every **blocking** row is ready.
 - **G1.3 (user):** commit the two missing scripts.
 
 **Done when**
-- the go/no-go alert audit passes: qty 1, guard version, exactly one live
-  alert;
 - `phase3_report.md` is in the repo and the down-break decision is
   recorded;
 - the M1 evidence is reproducible from the repo.
@@ -108,10 +105,10 @@ Live trading should resume only when every **blocking** row is ready.
 **Fixes**
 - **G3.1 (user):** recreate both probes with a far-out expiry when you
   deploy the guard alert.
-- **Backstop:** the stale guard (G1.1) blocks any late entry on each trade.
+- **Backstop:** the live alert's stale guard blocks any late entry on each trade.
 
-**Done when** the probes have more than 30 days to expiry, the 8:45 check
-shows no `probe_` warn, and the guard alert is live.
+**Done when** the probes have more than 30 days to expiry and the 8:45 check
+shows no `probe_` warn.
 
 ## 4. Execution: Ghost → Tradovate
 
