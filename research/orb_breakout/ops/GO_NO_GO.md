@@ -100,9 +100,14 @@ live name above.
   same Ghost webhook double every order. Stop all of them and tell the
   user.
 - **FAIL**: none exists (it was deleted or expired without being recreated).
-- Otherwise note its id, `active`, `create_time`, and whether it is the
-  stale-guard version. It is the guard version if it was created on or
-  after 2026-09-26, when the guard was deployed.
+- **FAIL (size)**: the alert's inputs aren't qty 1. TradingView appends the
+  script's inputs to the alert name, and the first one is qty, e.g.
+  `(2, 625, 90, ...)` means 2 contracts. Without this check, R5 only catches
+  a wrong size after a trade has gone through, as it did on 30 Sep and 2 Oct.
+- **FAIL (no guard)**: it isn't the stale-guard version, meaning it was
+  created before 2026-09-26, when the guard was deployed. A pre-guard build
+  would trade on a delayed feed with nothing to stop it.
+- Otherwise note its id, `active` and `create_time`.
 
 ## 4. Expiry: PASS, or WARN
 
@@ -131,9 +136,39 @@ From the `risk_state.py` output, report:
 
 R3 (buffer) is gated in check 1b.
 
+## Run the checks script: this decides the verdict
+
+Checks 1–4 are coded in `ops/checks.py` and covered by `ops/tests/`, which
+CI runs on every PR. Save each MCP result as JSON in the scratchpad (`$S`)
+and run main's copy of the script against the working-branch state:
+
+    git show origin/main:research/orb_breakout/ops/checks.py > $S/checks.py
+    git show origin/main:research/orb_breakout/ops/risk_state.py > $S/risk_state.py
+    python3 -I $S/checks.py gonogo --alerts $S/alerts.json --log $S/log.json \
+        --ohlcv $S/mes.json --ops-dir research/orb_breakout/ops
+
+- **What you save:**
+  - `alerts.json` = `mcp-tv-list-alerts`
+  - `log.json` = `mcp-tv-get-alerts-log`, 2 days
+  - `mes.json` = `mcp-tv-get-ohlcv`, `CME_MINI:MES1!`, 1m, `count` 3
+
+  If a call fails after retries, leave out `--ohlcv`, or pass
+  `{"events":[]}` for the log, and say so.
+- **Use the output:** `verdict`, `fails` and `action` are the decision. Do
+  what `action.do` says:
+  - `ensure_active` / `ensure_stopped`: make the alert ids active or
+    stopped, then confirm with `mcp-tv-list-alerts`;
+  - `stop` + `urgent`: stop them now, at any time, and tell the user;
+  - `none`: touch nothing.
+- **If the script disagrees with your own reading of the checks,** follow
+  the script and report the disagreement. That is a bug to fix by PR.
+- **Still done by hand:** check 0 (holidays) and check 5 (calendar). On a
+  holiday, don't run the script.
+
 ## Verdict and action
 
-- **GO** = checks 1, 1b, 2 and 3 pass and check 4 is not FAIL. Make sure the live
+- **GO** = checks 1, 1b, 2 and 3 pass and check 4 is not FAIL (as computed
+  by `checks.py`). Make sure the live
   alert is active; restart it if it's paused. It's 8:45 ET, before the
   session, so a restart is safe. Confirm `active=true`.
 - **NO-GO** = any of checks 1, 1b, 2, 3 or 4 fails. Stop the live alert if it's active
