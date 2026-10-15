@@ -9,12 +9,15 @@ Claude still runs the MCP calls and takes the action the output names.
         [--ohlcv mes.json] [--now 2026-10-15T12:45:00Z] [--ops-dir DIR]
     python3 ops/checks.py close --alerts alerts.json --log log.json \
         --shadow shadow.json --date 2026-10-15
+    python3 ops/checks.py watch --alerts alerts.json --log log.json \
+        [--now ...] [--ops-dir DIR]          # 9:50 ET read-only watch (WATCH.md)
 
 alerts.json = mcp-tv-list-alerts, log.json = mcp-tv-get-alerts-log (2 days),
 mes.json = mcp-tv-get-ohlcv CME_MINI:MES1! 1m (rows or columns),
 shadow.json = shadow_day.py output. Each command prints one JSON object.
 """
 import argparse
+import csv
 import json
 import os
 import re
@@ -295,6 +298,70 @@ def reconcile(events, shadow, day, alert_active, morning_lag_s=None):
 
 
 # --------------------------------------------------------------------------
+# 9:50 ET watch (WATCH.md): read-only, never touches an alert
+# --------------------------------------------------------------------------
+def morning_verdict(day, ops_dir=HERE):
+    """Today's verdict from golive_log.csv, or None when 8:45 logged nothing."""
+    path = os.path.join(ops_dir, "golive_log.csv")
+    if not os.path.exists(path):
+        return None
+    with open(path, newline="") as f:
+        rows = [r for r in csv.DictReader(f) if r.get("date") == day]
+    return rows[-1]["verdict"] if rows else None
+
+
+def watch(alerts, events, now, ops_dir=HERE, verdict=False):
+    day = now.astimezone(ET).date().isoformat()
+    if verdict is False:
+        verdict = morning_verdict(day, ops_dir)
+    hold = os.path.exists(os.path.join(ops_dir, "HOLD"))
+    pause = os.path.exists(os.path.join(ops_dir, "RISK_PAUSE"))
+    live = [a for a in alerts if is_live(a.get("name"))]
+    active = [a for a in live if a.get("active")]
+    todays = [e for e in events if is_live(e.get("name"))
+              and ts(e["fired_at"]).astimezone(ET).date().isoformat() == day]
+    buys = [msg(e) for e in todays if msg(e).get("action") == "buy"]
+    exits = [msg(e) for e in todays if msg(e).get("action") == "exit"]
+    sources = {e.get("tv_alert_id") for e in todays}
+
+    urgent, warn = [], []
+    if len(active) > 1 or len(sources) > 1 or len(buys) > 1:
+        urgent.append("duplicate_orders_possible")
+    if active and verdict != "GO":
+        # covers NO-GO, SKIP and a missing 8:45 row
+        urgent.append("alert_active_on_" + ("no_verdict" if verdict is None
+                                            else verdict.lower().replace("-", "")) + "_day")
+    if active and (hold or pause):
+        urgent.append("alert_active_during_" + ("hold" if hold else "risk_pause"))
+    for a in active:
+        q = qty_from_name(a["name"])
+        if q != 1:
+            urgent.append(f"active_alert_qty_{q}")
+        if a.get("create_time", "")[:10] < GUARD_DEPLOYED:
+            urgent.append("active_alert_has_no_stale_guard")
+    if buys and verdict != "GO":
+        urgent.append("live_entry_on_" + ("no_verdict" if verdict is None
+                                          else verdict.lower().replace("-", "")) + "_day")
+    for m in buys:
+        if m.get("qty") is not None and str(m["qty"]) != "1":
+            urgent.append(f"live_entry_qty_{m['qty']}")
+    if any(m.get("test") is True for m in buys + exits):
+        warn.append("live_alert_in_test_mode")
+    if verdict == "GO" and not active:
+        warn.append("alert_inactive_on_go_day")
+
+    urgent = list(dict.fromkeys(urgent))
+    status = "URGENT" if urgent else "WARN" if warn else "OK"
+    return {"date": day, "checked_at": iso(now), "verdict_845": verdict,
+            "status": status, "urgent": urgent, "warn": warn,
+            "active_ids": [a["alert_id"] for a in active],
+            "live_buys": len(buys), "live_exits": len(exits),
+            "notify": bool(urgent),
+            "action": {"do": "none",
+                       "why": "read-only: stopping mid-session can orphan an open trade's exit"}}
+
+
+# --------------------------------------------------------------------------
 def load(path):
     with open(path) as f:
         data = json.load(f)
@@ -319,6 +386,11 @@ def main(argv=None):
     c.add_argument("--shadow", required=True)
     c.add_argument("--date", required=True)
     c.add_argument("--morning-lag-s", type=float)
+    w = sub.add_parser("watch")
+    w.add_argument("--alerts", required=True)
+    w.add_argument("--log", required=True)
+    w.add_argument("--now")
+    w.add_argument("--ops-dir", default=HERE)
     a = ap.parse_args(argv)
 
     alerts = load(a.alerts).get("alerts", [])
@@ -327,6 +399,9 @@ def main(argv=None):
         now = ts(a.now) if a.now else datetime.now(timezone.utc)
         ohlcv = load(a.ohlcv) if a.ohlcv else None
         out = gonogo(alerts, events, ohlcv, now, ops_dir=a.ops_dir)
+    elif a.cmd == "watch":
+        now = ts(a.now) if a.now else datetime.now(timezone.utc)
+        out = watch(alerts, events, now, ops_dir=a.ops_dir)
     else:
         live = [x for x in alerts if is_live(x.get("name"))]
         active = any(x.get("active") for x in live)

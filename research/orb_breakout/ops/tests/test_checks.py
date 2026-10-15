@@ -229,3 +229,70 @@ def test_cli_roundtrip(tmp_path, capsys):
                         "--date", "2026-10-02"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["status"] == "live" and out["alert_active"] is True
+
+
+# --- 9:50 watch -------------------------------------------------------------
+NOW_950 = T("2026-10-15T13:50:00Z")
+GUARDED = alert(9001, LIVE_NEW, True, "2026-10-15T00:00:00Z")
+
+
+def buy_today(qty=1, aid=9001):
+    return ev(LIVE_NEW, "2026-10-15T13:45:00Z", "2026-10-15T13:46:01Z",
+              {"action": "buy", "price": 7850, "qty": qty, "sl": 7725,
+               "time": "2026-10-15T13:46:00Z"}, aid=aid)
+
+
+def test_watch_quiet_on_go_day_with_guarded_alert(tmp_path):
+    r = checks.watch([GUARDED], [buy_today()], NOW_950, ops_dir=str(tmp_path), verdict="GO")
+    assert r["status"] == "OK" and not r["notify"] and r["action"]["do"] == "none"
+
+
+def test_watch_urgent_when_alert_active_on_nogo_day(tmp_path):
+    r = checks.watch([GUARDED], [], NOW_950, ops_dir=str(tmp_path), verdict="NO-GO")
+    assert r["urgent"] == ["alert_active_on_nogo_day"] and r["notify"]
+
+
+def test_watch_reads_verdict_from_log_and_missing_row_is_urgent(tmp_path):
+    log = tmp_path / "golive_log.csv"
+    log.write_text("date,verdict\n2026-10-14,NO-GO\n")
+    r = checks.watch([GUARDED], [], NOW_950, ops_dir=str(tmp_path))
+    assert r["verdict_845"] is None and "alert_active_on_no_verdict_day" in r["urgent"]
+    log.write_text("date,verdict\n2026-10-15,GO\n")
+    assert checks.watch([GUARDED], [], NOW_950, ops_dir=str(tmp_path))["status"] == "OK"
+
+
+def test_watch_replays_2oct_reactivation(tmp_path):
+    # 2 Oct: risk pause on, the old qty-2 alert reactivated and traded
+    (tmp_path / "RISK_PAUSE").write_text("R5")
+    old = alert(5571966155, LIVE_OLD, True, "2026-09-09T14:02:51Z")
+    r = checks.watch([old], [BUY_2OCT], T("2026-10-02T13:50:00Z"),
+                     ops_dir=str(tmp_path), verdict="NO-GO")
+    for f in ("alert_active_on_nogo_day", "alert_active_during_risk_pause",
+              "active_alert_qty_2", "active_alert_has_no_stale_guard",
+              "live_entry_on_nogo_day", "live_entry_qty_2"):
+        assert f in r["urgent"]
+
+
+def test_watch_duplicates_and_inactive_go_day(tmp_path):
+    r = checks.watch([GUARDED, dict(GUARDED, alert_id=9002)], [], NOW_950,
+                     ops_dir=str(tmp_path), verdict="GO")
+    assert "duplicate_orders_possible" in r["urgent"]
+    r = checks.watch([dict(GUARDED, active=False)], [], NOW_950,
+                     ops_dir=str(tmp_path), verdict="GO")
+    assert r["status"] == "WARN" and r["warn"] == ["alert_inactive_on_go_day"]
+
+
+def test_watch_ignores_yesterdays_fires_and_inactive_nogo_is_ok(tmp_path):
+    r = checks.watch([dict(GUARDED, active=False)], [BUY_2OCT], NOW_950,
+                     ops_dir=str(tmp_path), verdict="NO-GO")
+    assert r["status"] == "OK" and r["live_buys"] == 0
+
+
+def test_watch_cli(tmp_path, capsys):
+    (tmp_path / "a.json").write_text(json.dumps({"alerts": [GUARDED]}))
+    (tmp_path / "l.json").write_text(json.dumps({"events": []}))
+    (tmp_path / "golive_log.csv").write_text("date,verdict\n2026-10-15,NO-GO\n")
+    assert checks.main(["watch", "--alerts", str(tmp_path / "a.json"), "--log",
+                        str(tmp_path / "l.json"), "--now", "2026-10-15T13:50:00Z",
+                        "--ops-dir", str(tmp_path)]) == 0
+    assert json.loads(capsys.readouterr().out)["notify"] is True
