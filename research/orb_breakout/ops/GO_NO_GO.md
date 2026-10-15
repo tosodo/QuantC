@@ -77,7 +77,8 @@ e.g. the DEMO probes ("QC Trend DEMO test BUY/SELL (dry run)", MNQ1! 3m) use
 
 - **PASS**: A's median lag is ≤ 2 min and B is ≤ 120 s. If A has no fires
   in the window, B alone (≤ 120 s) is a PASS. Log it as `B only` in
-  `notes`, and say whether the probes are active or expired.
+  `notes`, and report the script's `probe_` warns (silent, inactive or
+  expiring probes).
 - **FAIL**: A's median lag is > 2 min, or B is > 120 s. The data is delayed
   and the tested pass rates don't apply.
 - **FAIL (unknown)**: A has no fires and B couldn't be measured (the
@@ -154,7 +155,8 @@ and run main's copy of the script against the working-branch state:
 
   If a call fails after retries, leave out `--ohlcv`, or pass
   `{"events":[]}` for the log, and say so.
-- **Use the output:** `verdict`, `fails` and `action` are the decision. Do
+- **Use the output:** `verdict`, `fails` and `action` are the decision.
+  `warn` is reported, never acted on. Do
   what `action.do` says:
   - `ensure_active` / `ensure_stopped`: make the alert ids active or
     stopped, then confirm with `mcp-tv-list-alerts`;

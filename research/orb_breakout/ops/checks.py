@@ -135,6 +135,29 @@ def probe_lags(events, now):
     return sorted(lags)
 
 
+def probe_health(alerts, now):
+    """Non-blocking WARNs about the DEMO latency probes (G3.1). A probe that
+    shows active but hasn't fired inside the latency window is silent: check
+    2A then has no evidence and the verdict rests on B alone."""
+    start = probe_window_start(now)
+    warn = []
+    for a in alerts:
+        if "DEMO" not in (a.get("name") or "") or is_live(a.get("name")):
+            continue
+        aid = a["alert_id"]
+        exp = ts(a["expiration"]) if a.get("expiration") else None
+        if exp is not None and exp <= now:
+            continue                       # expired: nothing to warn about
+        last = ts(a["last_fire_time"]) if a.get("last_fire_time") else None
+        if not a.get("active"):
+            warn.append(f"probe_inactive_{aid}")
+        elif last is None or last < start:
+            warn.append(f"probe_silent_{aid}")
+        if exp is not None and (exp - now) <= timedelta(days=EXPIRY_WARN_DAYS):
+            warn.append(f"probe_expires_{iso(exp)[:10]}_{aid}")
+    return warn
+
+
 def median(xs):
     n = len(xs)
     if not n:
@@ -197,6 +220,9 @@ def gonogo(alerts, events, ohlcv, now, ops_dir=HERE, risk=None):
     if alert["status"] not in ("PASS", "WARN"):
         fails.append("alert_" + alert.get("reason", alert["status"].lower()))
     verdict = "GO" if not fails else "NO-GO"
+    warn = probe_health(alerts, now)
+    if alert["status"] == "WARN":
+        warn.append("alert_" + alert.get("reason", "warn"))
 
     after_open = now.astimezone(ET).time() >= time(9, 30)
     if alert["status"] == "FAIL_URGENT":
@@ -208,8 +234,8 @@ def gonogo(alerts, events, ohlcv, now, ops_dir=HERE, risk=None):
     else:
         action = {"do": "ensure_stopped", "alert_ids": alert["active_ids"]}
 
-    return {"date": asof, "verdict": verdict, "fails": fails, "action": action,
-            "latency": lat, "alert": alert, "hold": hold, "risk_pause_file": pause,
+    return {"date": asof, "verdict": verdict, "fails": fails, "warn": warn,
+            "action": action, "latency": lat, "alert": alert, "hold": hold, "risk_pause_file": pause,
             "risk": risk}
 
 
