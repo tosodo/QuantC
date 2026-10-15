@@ -2,7 +2,7 @@
 
 Used by the 4:15 ET close routine (ops/CLOSE_ROUTINE.md) to get the
 "shadow" trade: what the script's rules did on today's bars, whether or not
-the alert was live. Mirrors orb_long_ghost_DRAFT_mes_v2_accessible.pine:
+the alert was live. Mirrors orb_long_mes_v2.pine:
 
 - range = high/low of the 15 bars opening 9:30-9:44 ET
 - entry = close of the first bar from 9:45 that closes above the range high
