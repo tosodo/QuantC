@@ -21,7 +21,6 @@ What went wrong and what it taught us is in [`docs/incidents/`](../../docs/incid
 | alert | id | symbol | state |
 |---|---|---|---|
 | QuantC ORB Long MES v2 (validated) - Ghost (Accessible) (1, 625, 90, 300, 90, …) | 5849779220 | MES1! 1m | Live alert, created 15 Oct from `orb_long_mes_v2.pine`: qty 1, stale guard on. **Stopped**; the 8:45 check starts it on a GO day. Expires 14 Dec. |
-| QC Trend DEMO test BUY / SELL (dry run) | 5662901850 / 5662914432 | MNQ1! 3m | Latency probes, `"test":true` so no orders. Both silent 2–14 Oct; BUY fired again 15 Oct 00:36Z, SELL still silent. **Expire 21 Oct**: recreate both. |
 | QuantC Noise-Area MNQ - PAPER TEST ONLY | 5760603790 | MNQ1! 30m | Active, `"test":true`, paper only. Expires 2 Dec. |
 
 ## The live script
@@ -79,8 +78,7 @@ script alone changes nothing: the alert has to be recreated.
 4. **Delete the old alert.** Two live alerts on one webhook double every order.
 5. Check that the new alert's name shows `(1, 625, 90, …)` and that the chart
    dashboard has the DATA LAG row.
-6. While you're there, recreate the two DEMO probes with the latest expiry.
-7. Tell Claude. The next 8:45 check audits the new alert (qty 1, guard
+6. Tell Claude. The next 8:45 check audits the new alert (qty 1, guard
    version, exactly one live alert).
 
 ## Daily operation

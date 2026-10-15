@@ -23,7 +23,7 @@ From `ops/journal.csv`, for Mon-Fri of this week:
   untested in the original research; see Phase 3 item 1.
 
 From `ops/golive_log.csv`: count the GO and NO-GO days and give the reasons
-for each NO-GO. Give the median probe lag for each day.
+for each NO-GO. Give the bar freshness (`fresh Ns`) for each day.
 
 Run `python3 research/orb_breakout/ops/risk_state.py` and report:
 - the buffer, and whether it is estimated

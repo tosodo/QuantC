@@ -8,6 +8,12 @@ Format: `date · PR · what changed, and why`. Link the decision or incident
 it implements.
 
 ## 2026-10-15
+- **#20** Retired the latency probes (D-018, supersedes D-013). The 8:45
+  latency check is MES bar freshness alone; the live script's stale guard
+  stays the per-trade check. Removed the probe code and `probe_` warns from
+  `checks.py`, dropped `--log` from `checks.py gonogo`, renamed the close
+  check's `--morning-lag-s` to `--morning-fresh-s`. Deleted the two DEMO
+  probe alerts (5662901850, 5662914432). Closes G3.1.
 - **#19** Alignment pass. The 8:45 check warns on silent, inactive or
   expiring latency probes (the DEMO probes show active but haven't fired
   since 2 Oct). Pinned `research/orb_breakout/requirements.txt` (closes

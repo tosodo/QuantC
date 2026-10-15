@@ -41,27 +41,8 @@ Run `python3 research/orb_breakout/ops/risk_state.py`.
 
 ## 2. Data latency: must PASS
 
-Two independent measures. Use both when both are available.
-
-**A. Probe fires.** Use `mcp-tv-get-alerts-log` (last 2 days). A probe is
-any alert that can't place a real order: its name contains `DEMO` or
-`PAPER TEST ONLY`, or its message has `"test":true`. Never use the live
-alert's own fires. For each fire, use that alert's own `resolution`:
-
-    lag = fired_at − (bar_time + resolution)
-
-e.g. the DEMO probes ("QC Trend DEMO test BUY/SELL (dry run)", MNQ1! 3m) use
-3 min. The Noise-Area paper alert (MNQ1! 30m) uses 30 min.
-
-- Use the probe fires from the last 16 hours. On Monday, use the fires
-  since Sunday's 6pm ET reopen. The 19–20 Sep 2026 feed lapse happened over
-  a weekend, so Friday's fires don't count.
-- Most of the evidence comes from the DEMO probes, which fire overnight. The
-  Noise-Area alert only fires during the regular session, so it's usually
-  outside the 16-hour window. Count it when it is inside.
-
-**B. Bar freshness.** Run `mcp-tv-get-ohlcv` on `CME_MINI:MES1!`, 1m,
-`count` 3. Compare the newest bar's open time `t` with the current time:
+Run `mcp-tv-get-ohlcv` on `CME_MINI:MES1!`, 1m, `count` 3. Compare the
+newest bar's open time `t` with the current time:
 
     freshness = now − t   (the newest bar is still forming)
 
@@ -70,27 +51,23 @@ e.g. the DEMO probes ("QC Trend DEMO test BUY/SELL (dry run)", MNQ1! 3m) use
   10-min delayed feed it's about 600 s or more.
 - Globex trades at 8:45 ET, so this works every weekday morning, including
   Monday.
-- It's the MCP's view of the account's data, not the alert server's. That's
-  why A is preferred when it has fires.
 
 **Verdict.**
 
-- **PASS**: A's median lag is ≤ 2 min and B is ≤ 120 s. If A has no fires
-  in the window, B alone (≤ 120 s) is a PASS. Log it as `B only` in
-  `notes`, and report the script's `probe_` warns (silent, inactive or
-  expiring probes).
-- **FAIL**: A's median lag is > 2 min, or B is > 120 s. The data is delayed
-  and the tested pass rates don't apply.
-- **FAIL (unknown)**: A has no fires and B couldn't be measured (the
-  ohlcv call failed after retries). No evidence counts as a fail.
+- **PASS**: freshness ≤ 120 s.
+- **FAIL**: freshness > 120 s. The data is delayed and the tested pass
+  rates don't apply.
+- **FAIL (unknown)**: the ohlcv call failed after retries. No evidence
+  counts as a fail.
 
-Log A's median in `median_lag_s` and A's fire count in `probe_fires`. Put
-B's figure in `notes`, e.g. `fresh 5s`.
+Put the figure in `notes`, e.g. `fresh 5s`.
 
 The stale-data guard in the live script (see `SETUP_GUIDE.md`) is the
-per-trade backstop: it blocks an entry whose bar is more than 90 s late.
-This check is the daily one: it keeps the alert off on mornings when the
-feed is already known to be delayed.
+per-trade check: it measures the lag inside TradingView's alert engine on
+the breakout bar itself and blocks an entry more than 90 s late. This
+check is the daily one: it keeps the alert off on mornings when the feed is
+already known to be delayed. There are no separate latency probe alerts
+(D-018).
 
 ## 3. Alert state: must PASS
 
@@ -145,16 +122,15 @@ and run main's copy of the script against the working-branch state:
 
     git show origin/main:research/orb_breakout/ops/checks.py > $S/checks.py
     git show origin/main:research/orb_breakout/ops/risk_state.py > $S/risk_state.py
-    python3 -I $S/checks.py gonogo --alerts $S/alerts.json --log $S/log.json \
+    python3 -I $S/checks.py gonogo --alerts $S/alerts.json \
         --ohlcv $S/mes.json --ops-dir research/orb_breakout/ops
 
 - **What you save:**
   - `alerts.json` = `mcp-tv-list-alerts`
-  - `log.json` = `mcp-tv-get-alerts-log`, 2 days
   - `mes.json` = `mcp-tv-get-ohlcv`, `CME_MINI:MES1!`, 1m, `count` 3
 
-  If a call fails after retries, leave out `--ohlcv`, or pass
-  `{"events":[]}` for the log, and say so.
+  If the ohlcv call fails after retries, leave out `--ohlcv` (the verdict
+  is then NO-GO, latency unknown) and say so.
 - **Use the output:** `verdict`, `fails` and `action` are the decision.
   `warn` is reported, never acted on. Do
   what `action.do` says:
@@ -185,7 +161,9 @@ push to the working branch. It gets merged with the next PR.
 
     date,verdict,median_lag_s,probe_fires,alert_id,alert_active_after,guard_version,expiry,events,risk,notes
 
-(`risk` = `ok`, or the tripped rules, `;`-separated.)
+(`risk` = `ok`, or the tripped rules, `;`-separated. Leave `median_lag_s`
+and `probe_fires` blank: they hold the retired probe figures (D-018).
+The freshness figure goes in `notes` as `fresh Ns`.)
 
 Then tell the user in 3–5 lines: the verdict, why, the action taken, and
 any WARN.
