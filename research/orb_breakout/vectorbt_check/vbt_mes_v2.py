@@ -20,7 +20,7 @@ Rules replayed (the locked v2 baseline, no slippage):
   - cost = REAL_COST_POINTS ES free tier, half per leg; MES = $5/pt
 
 --rules live replays what the LIVE script runs instead
-(orb_long_ghost_DRAFT_mes_v2_accessible.pine, mirrored by ops/shadow_day.py):
+(orb_long_mes_v2.pine, mirrored by ops/shadow_day.py):
   - no down-break skip (those days are traded)
   - stop = entry - 125 pts
   - 90-min exit re-checked on every bar: first bar >= 90 min after the entry

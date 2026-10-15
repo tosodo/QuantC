@@ -60,6 +60,10 @@ List what is still waiting on the user:
   weeks)
 - the alert expiry
 - a missing or unrun `phase3_report.md`
+- **records:** for any URGENT flag, failed control or new kind of NO-GO
+  this week, check that `docs/incidents/` has a record (propose one if
+  not). Check that every decision taken this week is in
+  `docs/DECISIONS.md`.
 
 ## 4. Write and report
 

@@ -3,7 +3,7 @@
 live_rules_backtest.py - Phase 3 of the 2026-09-26 council review.
 
 Backtests the rules the LIVE script actually runs
-(orb_long_ghost_DRAFT_mes_v2_accessible.pine), using the exact same replay
+(orb_long_mes_v2.pine), using the exact same replay
 code as the daily journal (ops/shadow_day.py replay_day), on the full
 Databento ES history (MES proxy, same points, $5/pt):
 

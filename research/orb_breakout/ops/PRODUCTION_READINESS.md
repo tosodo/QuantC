@@ -1,9 +1,14 @@
 # Production readiness: MES v2 ORB
 
 This is the gap register for every part of the system, from strategy
-evidence to the broker. It holds one entry per subsystem: its status, the
-gaps, the fix, who owns the fix, and when it counts as done. Keep it
-current by PR: a gap is closed when its "done when" is met.
+evidence to the broker. It holds one entry per subsystem: its status, what
+is in place, the open gaps, the fix, who owns the fix, and when it counts as
+done.
+
+It's a live document, edited by PR. When a gap's "done when" is met:
+- delete the gap here, and add what's now in place to "In place";
+- record the closure in `CHANGELOG.md`;
+- add a `docs/DECISIONS.md` entry if it changed a rule.
 
 Opened 2026-10-14. Live trading has been paused (R5) since 30 Sep.
 
@@ -39,7 +44,7 @@ Live trading should resume only when every **blocking** row is ready.
 
 **Fixes**
 - **G1.1 (user, outside market hours):** follow `SETUP_GUIDE.md` →
-  "Deploying it". Create the guard alert at qty 1 with the same Ghost
+  "Replacing the live alert". Create the guard alert at qty 1 with the same Ghost
   webhook and a far-out expiry, then delete 5571966155. `checks.py` now
   fails the go/no-go for any live-named alert that has qty ≠ 1 or predates
   the guard, so the old alert can't trade again.
@@ -59,28 +64,26 @@ Live trading should resume only when every **blocking** row is ready.
 
 ## 2. Kill switch and alert control
 
+**In place**
+- 9:50 ET read-only watch (`WATCH.md`, `checks.py watch`). It sends a push
+  notification if the live alert is active on a day that isn't GO, during a
+  HOLD or risk pause, at qty ≠ 1 or without the guard, or if a live entry
+  fired on such a day. It never stops the alert (PR
+  #17).
+
 **Gaps**
 - **G2.1 Reactivations outside the routines.** The live alert was
   reactivated on 1 Oct and 2 Oct, and the 2 Oct trade went through during
   a risk pause. The cause is still unknown. Until it's known, a NO-GO or a
   HOLD can't be relied on.
-- **G2.2 Nothing watches the alert between 8:45 and 4:15.** An alert
-  switched on at 9:31 is only seen at the close.
 
 **Fixes**
 - **G2.1 (user):** find the cause. Check TradingView login history and
   devices, mobile app sessions, and anyone with access. Then change the
-  TradingView password and turn on 2FA. Record the outcome here.
-- **G2.2 (Claude, done 2026-10-15):** a read-only 9:50 ET watch
-  (`WATCH.md`, `checks.py watch`, 7 tests). It sends a push notification if
-  the live alert is active on a day that isn't GO, during a HOLD or risk
-  pause, at qty ≠ 1 or without the guard, or if a live entry fired on such a
-  day. It never stops the alert mid-session: that could orphan the exit of
-  an open position. The user decides what to do. Each run is logged in
-  `watch_log.csv`.
+  TradingView password and turn on 2FA.
 
-**Done when** the cause of G2.1 is known and closed (the 9:50 watch is
-running).
+**Done when** the cause of G2.1 is known and closed. Record it in
+`docs/incidents/2026-09-30_qty2-and-reactivations.md`.
 
 ## 3. Market data feed and latency
 
@@ -89,7 +92,7 @@ running).
   8 mornings of "FAIL (unknown)". They were restarted 14 Oct, but they
   expire **21 Oct**.
 
-**Done so far**
+**In place**
 - The latency check has two independent measures, probe lag and MES bar
   freshness (PR #15).
 - The verdict is coded and tested (`checks.py latency`).
@@ -136,7 +139,7 @@ than 7 days old.
 
 ## 5. Risk engine
 
-**Done so far**
+**In place**
 - `risk_state.evaluate()` is covered by `ops/tests/test_risk_state.py`:
   R1–R5, resumes, the trailing floor and the floor lock.
 - It now reports `buffer_anchor_age_days`.
@@ -149,7 +152,7 @@ than 7 days old.
 
 ## 6. Routines
 
-**Done so far**
+**In place**
 - The go/no-go verdict and the close reconcile are code, not judgement
   (`ops/checks.py`, 35 tests; 54 across `ops/tests/`).
 - Two new pre-trade gates: qty must be 1, and the stale guard must be
@@ -171,7 +174,7 @@ than 7 days old.
 
 ## 7. Strategy evidence
 
-**Done so far**
+**In place**
 - Independent re-implementation on vectorbt (`vectorbt_check/`).
   - It matches `mes_final_run.py` (§2.7 rules) and `shadow_day.py` (live
     rules) trade-for-trade on the TradingView bars available.
@@ -190,9 +193,15 @@ than 7 days old.
 
 ## 8. Engineering
 
-**Done so far**
-- CI (`.github/workflows/ci.yml`) byte-compiles everything and runs the ops
-  tests on every PR and on every push to main.
+**In place**
+- CI (`.github/workflows/ci.yml`) runs on every PR and every push to main:
+  - byte-compiles everything;
+  - runs the ops tests;
+  - runs `tools/check_docs.py`, the documentation policy check: links,
+    archive index, no stale content in live documents, a changelog entry
+    for every PR.
+- Records of every change, decision and incident: `CHANGELOG.md`,
+  `docs/DECISIONS.md`, `docs/incidents/`.
 - `vectorbt_check/requirements.txt` is pinned and pip-audit clean.
 
 **Gaps**

@@ -214,10 +214,10 @@ time. Fixed by creating a new alert directly on the draft script and
 pointing it at the same Ghost webhook, so the ticker now actually runs
 *this* section's tested mechanism (~125pt stop + 90-min time exit) rather
 than the 10/20 fallback. Full detail in
-[SETUP_GUIDE.md](SETUP_GUIDE.md). The same mis-wiring was found and fixed
+[the incident record](../../docs/incidents/2026-08-27_ghost-stop-miswiring.md). The same mis-wiring was found and fixed
 for MNQ too, which is now running STOPLOSS_HYPOTHESIS.md's opposite-range
 stop instead of the plain no-stop mechanism — also detailed in
-SETUP_GUIDE.md. The two mechanisms (this section's vs. the plain no-stop
+that incident record. The two mechanisms (this section's vs. the plain no-stop
 one) have still not been reconciled into one *research* recommendation for
 which is objectively better — see the note in §3 below — but operationally,
 both live accounts now run their respective best-tested draft rather than
