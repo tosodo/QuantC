@@ -24,8 +24,8 @@ nothing.
 3. `mcp-tv-get-alerts-log` (today) → save as `$S/log.json`.
 
 **If the TradingView MCP is down** after retries: send a push notification
-right away: "9:50 watch could not reach TradingView. Check the MES v2 alert
-and Tradovate yourself." Log `MCP_DOWN` and stop.
+right away: "9:50 watch could not reach TradingView. Check the MES v2
+alert and Tradovate yourself." Log `MCP_DOWN` and stop.
 
 ## 2. Run the script: it decides
 
@@ -58,10 +58,11 @@ the disagreement as a bug to fix by PR.
 
 ## 3. Notify and log
 
-- **URGENT:** send one push notification. Lead with the flags in plain
-  words, then: "Nothing was changed. If you didn't switch it on, check
-  Tradovate for a position and decide whether to stop the alert. Stopping it
-  with a trade open leaves the exit to the Ghost stop bracket only."
+- **URGENT:** send one push notification, one line under 200 characters,
+  flags in plain words first, e.g. "MES v2 alert ACTIVE on a NO-GO day, qty
+  2. Nothing changed. Check Tradovate for a position; you decide whether to
+  stop it." Then in the session report, say that stopping the alert with a
+  trade open leaves the exit to the Ghost stop bracket only.
 - **OK / WARN:** no push.
 
 Append one line to `research/orb_breakout/ops/watch_log.csv`, commit and
