@@ -8,6 +8,10 @@ Format: `date · PR · what changed, and why`. Link the decision or incident
 it implements.
 
 ## 2026-10-15
+- **#19** Alignment pass. The 8:45 check warns on silent, inactive or
+  expiring latency probes (the DEMO probes show active but haven't fired
+  since 2 Oct). Pinned `research/orb_breakout/requirements.txt` (closes
+  G8.1). Readiness register, GO_NO_GO and SETUP_GUIDE brought in line.
 - **#18** Documentation policy (D-016). Root README with a map of live
   documents; `archive/` with the old SETUP_GUIDE (verbatim) and the 5
   retired Pine scripts; changelog, decision log and incident records;

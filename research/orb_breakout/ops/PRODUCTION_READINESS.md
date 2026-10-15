@@ -21,7 +21,7 @@ Opened 2026-10-14. Live trading has been paused (R5) since 30 Sep.
 | 3 | Market data feed and latency | partial | no |
 | 4 | Execution: Ghost → Tradovate | **not ready** | yes |
 | 5 | Risk engine (`risk_state.py`) | partial | no |
-| 6 | Routines (8:45, 4:15, Friday) | partial | no |
+| 6 | Routines (8:45, 9:50, 4:15, Friday) | partial | no |
 | 7 | Strategy evidence (backtests) | partial | no |
 | 8 | Engineering: tests, CI, reproducibility | partial | no |
 
@@ -88,22 +88,29 @@ Live trading should resume only when every **blocking** row is ready.
 ## 3. Market data feed and latency
 
 **Gaps**
-- **G3.1 Paused probes.** The DEMO probes were paused 2–14 Oct, which gave
-  8 mornings of "FAIL (unknown)". They were restarted 14 Oct, but they
-  expire **21 Oct**.
+- **G3.1 Silent probes.** Both DEMO probes (5662901850, 5662914432) show
+  active, but neither has fired since 2 Oct. Before that they fired several
+  times a day. The 14 Oct restart didn't bring them back, so check 2A has
+  no evidence and the latency verdict rests on B (bar freshness) alone.
+  They expire **21 Oct**. They carry a webhook, so only the user can
+  recreate them: the MCP can't create webhook alerts, and restarting them
+  from a routine isn't permitted.
 
 **In place**
 - The latency check has two independent measures, probe lag and MES bar
   freshness (PR #15).
 - The verdict is coded and tested (`checks.py latency`).
+- The 8:45 check reports silent, inactive or expiring probes as a `warn`
+  (`probe_silent_<id>`, `probe_inactive_<id>`, `probe_expires_<date>_<id>`).
+  These never block the verdict.
 
 **Fixes**
 - **G3.1 (user):** recreate both probes with a far-out expiry when you
   deploy the guard alert.
 - **Backstop:** the stale guard (G1.1) blocks any late entry on each trade.
 
-**Done when** the probes have more than 30 days to expiry and the guard
-alert is live.
+**Done when** the probes have more than 30 days to expiry, the 8:45 check
+shows no `probe_` warn, and the guard alert is live.
 
 ## 4. Execution: Ghost → Tradovate
 
@@ -154,7 +161,7 @@ than 7 days old.
 
 **In place**
 - The go/no-go verdict and the close reconcile are code, not judgement
-  (`ops/checks.py`, 35 tests; 54 across `ops/tests/`).
+  (`ops/checks.py`, tested in `ops/tests/`, which CI runs on every PR).
 - Two new pre-trade gates: qty must be 1, and the stale guard must be
   present.
 - A disagreement between the script and Claude's own reading is reported
@@ -202,13 +209,12 @@ than 7 days old.
     for every PR.
 - Records of every change, decision and incident: `CHANGELOG.md`,
   `docs/DECISIONS.md`, `docs/incidents/`.
-- `vectorbt_check/requirements.txt` is pinned and pip-audit clean.
+- Pinned, pip-audit clean dependencies: `requirements.txt` for the research
+  scripts (pandas 3, databento) and `vectorbt_check/requirements.txt`.
 
 **Gaps**
-- **G8.1 Unpinned dependencies.** The research scripts have no pinned
-  dependency file, beyond pandas and databento being needed.
 - **G8.2 Untested research code.** The research code itself has no tests.
   The vectorbt cross-check is the safety net for it.
 
-**Done when** CI is green on main and a `requirements.txt` exists for the
-research scripts.
+**Done when** the research code has tests, or the 5-year vectorbt
+cross-check (G7.1) passes with 0 mismatches as its stand-in.

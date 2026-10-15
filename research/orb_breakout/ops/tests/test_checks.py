@@ -153,6 +153,31 @@ def test_hold_is_no_go(tmp_path):
     assert out["fails"] == ["hold"]
 
 
+def test_silent_and_expiring_probes_warn_but_never_block(tmp_path):
+    # The real 15 Oct state: both DEMO probes active, last fired 2 Oct, expire 21 Oct.
+    now = T("2026-10-15T12:45:00Z")
+    probes = [dict(alert(5662901850, "QC Trend DEMO test BUY (dry run)", True,
+                         exp="2026-10-21T15:09:13Z"), last_fire_time="2026-10-02T12:33:00Z"),
+              dict(alert(5662914432, "QC Trend DEMO test SELL (dry run)", True,
+                         exp="2026-10-21T15:11:10Z"), last_fire_time="2026-10-02T15:09:00Z")]
+    fresh = {"bars": {"t": [int(T("2026-10-15T12:44:30Z").timestamp())]}}
+    out = checks.gonogo([alert(9, LIVE_NEW, False)] + probes, [], fresh, now,
+                        ops_dir=str(tmp_path), risk=GOOD_RISK)
+    assert out["verdict"] == "GO" and out["latency"]["note"] == "B only"
+    assert out["warn"] == ["probe_silent_5662901850", "probe_expires_2026-10-21_5662901850",
+                           "probe_silent_5662914432", "probe_expires_2026-10-21_5662914432"]
+
+
+def test_healthy_probe_no_warn_and_expired_probe_ignored():
+    now = T("2026-10-19T12:45:00Z")
+    ok = dict(alert(1, "QC Trend DEMO test BUY (dry run)", True), last_fire_time="2026-10-19T09:00:00Z")
+    gone = dict(alert(2, "QC Trend DEMO test SELL (dry run)", False, exp="2026-10-18T00:00:00Z"))
+    paper = alert(3, "QuantC Noise-Area MNQ - PAPER TEST ONLY", True)   # session-only, not a DEMO probe
+    assert checks.probe_health([ok, gone, paper], now) == []
+    off = alert(4, "QC Trend DEMO test SELL (dry run)", False)
+    assert checks.probe_health([off], now) == ["probe_inactive_4"]
+
+
 def test_never_touch_after_open(tmp_path):
     out = checks.gonogo([alert(9, LIVE_NEW, False)], [], FRESH, T("2026-10-19T13:31:00Z"),
                         ops_dir=str(tmp_path), risk=GOOD_RISK)
