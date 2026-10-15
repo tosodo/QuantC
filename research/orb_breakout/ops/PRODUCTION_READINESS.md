@@ -71,15 +71,16 @@ Live trading should resume only when every **blocking** row is ready.
 - **G2.1 (user):** find the cause. Check TradingView login history and
   devices, mobile app sessions, and anyone with access. Then change the
   TradingView password and turn on 2FA. Record the outcome here.
-- **G2.2 (Claude, by PR when approved):** add a read-only 9:50 ET check.
-  - If the live alert is active on a NO-GO day, it alerts the user with a
-    push notification.
-  - It never stops the alert mid-session: stopping it could orphan the exit
-    of an open position.
-  - The user decides what to do.
+- **G2.2 (Claude, done 2026-10-15):** a read-only 9:50 ET watch
+  (`WATCH.md`, `checks.py watch`, 7 tests). It sends a push notification if
+  the live alert is active on a day that isn't GO, during a HOLD or risk
+  pause, at qty ≠ 1 or without the guard, or if a live entry fired on such a
+  day. It never stops the alert mid-session: that could orphan the exit of
+  an open position. The user decides what to do. Each run is logged in
+  `watch_log.csv`.
 
-**Done when** the cause of G2.1 is known and closed, and the 9:50 watch is
-running.
+**Done when** the cause of G2.1 is known and closed (the 9:50 watch is
+running).
 
 ## 3. Market data feed and latency
 
@@ -150,7 +151,7 @@ than 7 days old.
 
 **Done so far**
 - The go/no-go verdict and the close reconcile are code, not judgement
-  (`ops/checks.py`, 28 tests; 47 across `ops/tests/`).
+  (`ops/checks.py`, 35 tests; 54 across `ops/tests/`).
 - Two new pre-trade gates: qty must be 1, and the stale guard must be
   present.
 - A disagreement between the script and Claude's own reading is reported
