@@ -46,3 +46,28 @@ Go/no-go: 2 GO (29, 30 Sep), 3 NO-GO (28 Sep: data delay 600 s and tool error; 1
 **Open items (user):** set the live alert's qty input to 1 and say "resume" (R5); restart the DEMO probe alerts, which also expire 21 Oct; Lucid P&L for 21 Sep, 30 Sep and 2 Oct; a fresh Lucid balance (anchor 24 Sep is now over 2 weeks old); Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission, alert redeploy with stale guard); phase3_report.md not committed. Live alert expiry 25 Nov (47 days).
 
 **Proposed change (operational, not strategy):** before resuming, redeploy the stale-guard script as a new alert with qty 1 and delete 5571966155. Evidence: R5 has blocked trading all week, and the redeploy fixes the size and the missing guard in one step.
+
+## Week of 2026-10-12 (written 2026-10-16)
+
+**Days:** 0 live, 2 shadow, 3 no-breakout, 0 stale-skip, 0 missed. Go/no-go: 0 GO, 5 NO-GO, every day for the R5 risk pause. Latency: 12-14 Oct "FAIL (unknown)" because the DEMO probes were paused; probes retired by D-018 (#20) on 15 Oct. Bar freshness since then: 15 Oct fresh 9s, 16 Oct fresh 16s. The 9:50 watch ran from 15 Oct: OK both days, no live fires.
+
+| date | status | entry | exit (reason) | signal P&L (1 MES) |
+|---|---|---|---|---|
+| 12 Oct | no breakout (range 7862.25-7870) | - | - | - |
+| 13 Oct | no breakout (range 7847-7863.25) | - | - | - |
+| 14 Oct | shadow, CPI day | 7835.5 09:48 | 7796 11:18 (90 min) | -197.50 |
+| 15 Oct | shadow, PPI/Retail Sales, down-break-first | 7753 10:11 | 7790.75 16:00 (session close) | +188.75 |
+| 16 Oct | no breakout (range 7780.75-7803) | - | - | - |
+
+**Totals:** shadow signal P&L -8.75 (1 MES) over 2 entries. Live P&L 0 (alert off all week).
+**Execution:** no live fires, so no lag or slippage data. Flags: none from the close reconcile.
+**Down-break-first:** 1 entry (15 Oct, +188.75).
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, now 22 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place. No alert was restarted outside the routines.
+
+**Against expectations:** 2 signal entries vs about 2.6 a week; average -4.38 a trade vs about +11. The loser was cut by the 90-minute exit (no full stop), which fits the expected pattern. One week, all shadow, is noise; no conclusions. Running totals wait for 4 weeks of live rows (2 live rows so far).
+
+**Records:** D-018 (probes retired) is in DECISIONS.md. No URGENT flag, failed control or new kind of NO-GO this week, so no new incident record needed.
+
+**Open items (user):** say "resume" when ready (R5; the qty-1 stale-guard alert 5849779220 is already deployed and passes the audit); a fresh Lucid balance for account.csv (anchor 24 Sep is over 2 weeks old); Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. Live alert expiry 14 Dec (58 days).
+
+**Proposed change:** none to the strategy. Before saying "resume", add a current Lucid balance to account.csv so R3 is checked against a real buffer rather than a 3-week-old estimate.
