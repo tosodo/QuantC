@@ -98,13 +98,13 @@ def test_min_days_and_daily_loss():
 def test_lucid_rule_set_reproduces_lucid_run_exactly():
     rng = random.Random(4)
     pairs = [(rng.gauss(4, 90), abs(rng.gauss(40, 40))) for _ in range(1500)]
-    assert ff.RULE_SETS["Lucid 100K (current model)"]["dd_type"] == "eod_trailing"
+    assert ff.RULE_SETS["Lucid 100K LucidPro (price GUESS)"]["dd_type"] == "eod_trailing"
     r = {k: v for k, v in LUCID.items()}
     for i in range(0, 1400, 37):
         mine = ff.run_rules([(p, m, 1) for p, m in pairs[i:]], r)
         assert mine[:2] == ff.lrb.lucid_run(pairs[i:])
     # and the table's own Lucid entry agrees on the numbers that matter
-    t = ff.RULE_SETS["Lucid 100K (current model)"]
+    t = ff.RULE_SETS["Lucid 100K LucidPro (price GUESS)"]
     assert (t["start"], t["target"], t["dd"], t["lock"]) == (
         ff.lrb.START_BAL, ff.lrb.TARGET - ff.lrb.START_BAL, ff.lrb.TRAIL,
         ff.lrb.LOCK_FLOOR - ff.lrb.START_BAL)
@@ -150,3 +150,12 @@ def test_make_seq_gaps():
     out = ff.make_seq(ts, 0.0, 0)
     assert [g for _, _, g in out] == [1, 3]
     assert out[1][0] == -5.0 and out[1][1] == 10.0
+
+
+def test_monthly_fee_scales_with_time_in_attempt():
+    r = dict(ff.RULE_SETS["Topstep 100K Combine (standard)"])
+    fast = ff.cost_model(0.5, 0.2, r, 100)["cost"]
+    slow = ff.cost_model(0.5, 0.2, r, 800)["cost"]
+    assert slow > fast
+    r["monthly_fee"] = 0.0
+    assert ff.cost_model(0.5, 0.2, r, 800)["cost"] < slow

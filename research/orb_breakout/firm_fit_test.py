@@ -15,8 +15,8 @@ build_continuous.py. Run from this folder:
     python3 firm_fit_test.py > firm_fit_report.md
     python3 firm_fit_test.py --data PATH --sims 3000
 
-The rule sets are PLACEHOLDERS to edit. The verified firm rules live in
-FIRM_RULES_SURVEY.md; copy numbers from there, not from this file.
+The rule sets come from FIRM_RULES_SURVEY.md and are unverified (search
+snippets); edit RULE_SETS as the firms' own pages are checked.
 """
 import argparse
 import os
@@ -29,9 +29,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import live_rules_backtest as lrb  # noqa: E402
 
-# ---------- RULE SETS: PLACEHOLDERS, EDIT HERE ----------
-# Every number below is a placeholder for exploring, NOT a real firm's rule or
-# price. Dollar amounts are for 1 MES on the stated account size.
+# ---------- RULE SETS ----------
+# Numbers come from FIRM_RULES_SURVEY.md (2026-10-20, search snippets, no page read
+# in full). Tags: OFF = firm's own help-center snippet, 3P = third party, GUESS =
+# not found, a stand-in. Dollar amounts are for 1 MES on the stated account size.
 #   start         starting balance
 #   target        profit target, $ above start
 #   dd            max drawdown size, $
@@ -42,42 +43,49 @@ import live_rules_backtest as lrb  # noqa: E402
 #   consistency   best single day must be <= this share of total profit at the
 #                 moment of passing (None = no rule)
 #   min_days      minimum trading days before a pass counts
-#   eval_fee      cost of attempt 1 (PLACEHOLDER)
-#   reset_fee     cost of each retry after a breach (PLACEHOLDER)
-#   activation_fee  one-off cost on a pass (PLACEHOLDER)
+#   eval_fee      one-off cost of attempt 1
+#   monthly_fee   subscription per month while an attempt is running (0 = one-time)
+#   reset_fee     cost of each retry after a breach
+#   activation_fee  one-off cost on a pass
+# Only the evaluation is modelled. Funded-stage rules (Lucid 40% consistency and
+# $750 cycle minimum, Topstep MLL reset to 0 after each payout) are not.
 RULE_SETS = {
-    "Lucid 100K (current model)": dict(
+    # target 6000, MLL 3000 EOD OFF; lock +100 and eval price are GUESS (reset ~170 OFF)
+    "Lucid 100K LucidPro (price GUESS)": dict(
         start=100000.0, target=6000.0, dd=3000.0, dd_type="eod_trailing", lock=100.0,
         daily_loss=None, consistency=None, min_days=0,
-        eval_fee=100.0, reset_fee=80.0, activation_fee=0.0),               # fees PLACEHOLDER
-    "static 3000 on 100K, target 6000": dict(
-        start=100000.0, target=6000.0, dd=3000.0, dd_type="static", lock=None,
-        daily_loss=None, consistency=None, min_days=0,
-        eval_fee=150.0, reset_fee=100.0, activation_fee=0.0),              # fees PLACEHOLDER
-    "static 2000 on 50K, target 3000": dict(
-        start=50000.0, target=3000.0, dd=2000.0, dd_type="static", lock=None,
-        daily_loss=None, consistency=None, min_days=0,
-        eval_fee=80.0, reset_fee=60.0, activation_fee=0.0),                # fees PLACEHOLDER
-    "eod trailing 2000 on 50K, target 3000": dict(
+        eval_fee=170.0, monthly_fee=0.0, reset_fee=170.0, activation_fee=0.0),
+    # target 6000, MLL 3000 EOD, stops at start balance, 55% consistency, $99/mo, $149 activation: OFF
+    "Topstep 100K Combine (standard)": dict(
+        start=100000.0, target=6000.0, dd=3000.0, dd_type="eod_trailing", lock=0.0,
+        daily_loss=None, consistency=0.55, min_days=0,
+        eval_fee=0.0, monthly_fee=99.0, reset_fee=99.0, activation_fee=149.0),
+    # same rules, no-activation-fee path: $149/mo OFF
+    "Topstep 100K Combine (no activation fee)": dict(
+        start=100000.0, target=6000.0, dd=3000.0, dd_type="eod_trailing", lock=0.0,
+        daily_loss=None, consistency=0.55, min_days=0,
+        eval_fee=0.0, monthly_fee=149.0, reset_fee=149.0, activation_fee=0.0),
+    # 50K: target 3000, MLL 2000, 55% OFF; $49/mo + $149 activation OFF
+    "Topstep 50K Combine (standard)": dict(
+        start=50000.0, target=3000.0, dd=2000.0, dd_type="eod_trailing", lock=0.0,
+        daily_loss=None, consistency=0.55, min_days=0,
+        eval_fee=0.0, monthly_fee=49.0, reset_fee=49.0, activation_fee=149.0),
+    # 50K Select: target 3000, MLL 2000 EOD, 40% consistency, 3 min days, $165 / reset $109: OFF;
+    # eval one-time vs monthly unknown; where the trail locks unknown
+    "Tradeify Select 50K (40% consistency)": dict(
         start=50000.0, target=3000.0, dd=2000.0, dd_type="eod_trailing", lock=None,
-        daily_loss=None, consistency=None, min_days=0,
-        eval_fee=60.0, reset_fee=50.0, activation_fee=0.0),                # fees PLACEHOLDER
-    "eod trailing 3000 on 100K, lock +100, 5 min days": dict(
-        start=100000.0, target=6000.0, dd=3000.0, dd_type="eod_trailing", lock=100.0,
-        daily_loss=None, consistency=None, min_days=5,
-        eval_fee=100.0, reset_fee=80.0, activation_fee=50.0),              # fees PLACEHOLDER
-    "eod trailing 3000 on 100K, 40% consistency": dict(
+        daily_loss=None, consistency=0.40, min_days=3,
+        eval_fee=165.0, monthly_fee=0.0, reset_fee=109.0, activation_fee=0.0),
+    # 100K Select: target 6000, MLL 3000 are 3P only; price GUESS (2x the 50K)
+    "Tradeify Select 100K (3P figures)": dict(
         start=100000.0, target=6000.0, dd=3000.0, dd_type="eod_trailing", lock=None,
         daily_loss=None, consistency=0.40, min_days=3,
-        eval_fee=120.0, reset_fee=90.0, activation_fee=0.0),               # fees PLACEHOLDER
-    "intraday trailing 2500 on 50K, target 3000": dict(
-        start=50000.0, target=3000.0, dd=2500.0, dd_type="intraday_trailing", lock=None,
-        daily_loss=None, consistency=None, min_days=0,
-        eval_fee=70.0, reset_fee=60.0, activation_fee=0.0),                # fees PLACEHOLDER
-    "intraday trailing 2500 on 50K, daily loss 1000": dict(
-        start=50000.0, target=3000.0, dd=2500.0, dd_type="intraday_trailing", lock=0.0,
-        daily_loss=1000.0, consistency=None, min_days=0,
-        eval_fee=70.0, reset_fee=60.0, activation_fee=0.0),                # fees PLACEHOLDER
+        eval_fee=330.0, monthly_fee=0.0, reset_fee=218.0, activation_fee=0.0),
+    # MFFU Rapid EOD 50K: 3000 / 2000 EOD, 30% consistency, 4 min days OFF; price GUESS, no reset
+    "MFFU Rapid EOD 50K (price GUESS)": dict(
+        start=50000.0, target=3000.0, dd=2000.0, dd_type="eod_trailing", lock=None,
+        daily_loss=None, consistency=0.30, min_days=4,
+        eval_fee=125.0, monthly_fee=0.0, reset_fee=125.0, activation_fee=0.0),
 }
 
 HORIZON = 2000        # trades per bootstrap path, as lucid_run's bootstrap
@@ -204,7 +212,9 @@ def cost_model(p, b, rule, mean_trades, max_attempts=MAX_ATTEMPTS, tpy=TRADES_PE
     reach = [b ** k for k in range(max_attempts)]        # P(attempt k+1 is made)
     attempts = sum(reach)
     p_any = p * attempts
-    fees = rule["eval_fee"] + rule["reset_fee"] * (attempts - 1) + rule["activation_fee"] * p_any
+    months = mean_trades / tpy * 12 * attempts           # subscription months paid
+    fees = (rule["eval_fee"] + rule["reset_fee"] * (attempts - 1)
+            + rule.get("monthly_fee", 0.0) * months + rule["activation_fee"] * p_any)
     if p_any <= 0:
         return dict(attempts=attempts, p_any=0.0, cost=None, years=None)
     return dict(attempts=attempts, p_any=p_any, cost=fees / p_any,
@@ -232,8 +242,8 @@ def rule_text(r):
     cons = "-" if r["consistency"] is None else f"{100 * r['consistency']:.0f}%"
     dl = "-" if r["daily_loss"] is None else f"{r['daily_loss']:,.0f}"
     return (f"| {r['start']:,.0f} | {r['target']:,.0f} | {r['dd']:,.0f} {r['dd_type']}{lock} | "
-            f"{dl} | {cons} | {r['min_days']} | {r['eval_fee']:,.0f} / {r['reset_fee']:,.0f} / "
-            f"{r['activation_fee']:,.0f} |")
+            f"{dl} | {cons} | {r['min_days']} | {r['eval_fee']:,.0f} / {r.get('monthly_fee', 0):,.0f} / "
+            f"{r['reset_fee']:,.0f} / {r['activation_fee']:,.0f} |")
 
 
 def table(title, rules, sums, rolling, tpy):
@@ -271,10 +281,11 @@ def main():
     P("# Firm fit: the live ORB trades against a table of rule sets\n")
     P(f"Data: `{shown}`, {sessions[0]} to {sessions[-1]}, {len(sessions)} sessions, "
       f"{len(trades)} trades. Cost ${a.cost:.2f}/RT + {a.slip} tick, 1 MES.\n")
-    P("**Every rule set and fee below is a PLACEHOLDER from `RULE_SETS` in firm_fit_test.py, "
-      "not a real firm's terms.** Copy verified numbers from FIRM_RULES_SURVEY.md.\n")
+    P("Rule sets come from `RULE_SETS` in firm_fit_test.py, taken from FIRM_RULES_SURVEY.md "
+      "(search snippets, not verified on the firms' pages). Prices tagged GUESS are stand-ins. "
+      "Evaluation stage only: funded-stage rules and payouts are not modelled.\n")
     P("| rule set | start $ | target $ | drawdown $ | daily loss $ | consistency | min days | "
-      "eval / reset / activation fee $ |")
+      "eval / monthly / reset / activation fee $ |")
     P("|---|---|---|---|---|---|---|---|")
     for k, r in RULE_SETS.items():
         P(f"| {k} " + rule_text(r))
