@@ -14,6 +14,11 @@ it implements.
   `lucid_wf_test.py` is the harness (`threshold` and `run`), with 20 tests in
   `ops/tests/test_lucid_wf.py`. Lucid price, trail lock, payout cap and cycle length stay
   unverified.
+- `research/orb_breakout/edge_calculator.py` (research only; no rule changed): `measure`
+  reports mean, sd, t, a block-bootstrap interval, the Deflated Sharpe probability for N
+  looks, trades and years needed for t = 3, and Lucid pass odds from a closed form (checked
+  against the rule-engine simulation) and an optional bootstrap; `plan` gives the edge a
+  target pass rate needs. 9 tests in `ops/tests/test_edge_calculator.py`.
 
 ## 2026-10-15
 - **#20** Retired the latency probes (D-018, supersedes D-013). The 8:45
