@@ -23,6 +23,12 @@ it implements.
   pull or code) of an unchanged-rule ORB-long replication on ES, NQ and YM over 2010-2021,
   with day-clustered inference and fixed confirm, falsify and inconclusive rules. Research
   only; no rule changed. Lucid price, trail lock, payout cap and cycle length stay unverified.
+- `research/orb_breakout/audit_repaint.py` (read-only; no rule, alert or data changed): checks
+  bar integrity, session timestamps and DST, contract rolls, and per-trade fill realism
+  (entry at next open, stop gaps, exit at next open) with the net per trade before and after
+  measured fills; optional TradingView MES comparison. 8 tests in
+  `ops/tests/test_audit_repaint.py`. Lucid price, trail lock, payout cap and cycle length
+  stay unverified.
 
 ## 2026-10-15
 - **#20** Retired the latency probes (D-018, supersedes D-013). The 8:45
