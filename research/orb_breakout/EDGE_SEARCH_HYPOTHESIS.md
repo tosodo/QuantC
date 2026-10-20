@@ -98,3 +98,19 @@ checked against Lucid's own rulebook before this is relied on.
 - Any live change. A pass leads to a proposal and a decision record.
 - Moving to another prop firm. That depends on a candidate first clearing
   the criteria above.
+
+## Implementation notes (added when the test was written; rules above unchanged)
+
+- The S4 pass-rate check uses the bootstrap pass rate, because the rolling
+  rate is undefined at base costs (no real-order start finishes), as in
+  Phase 3. The rolling figure is still printed.
+- S1 is reported both long+short (the adoption test) and long-only (for
+  information). S3 multipliers 0.5/1.5/2.0 and S4 windows 10/40 are printed as
+  sensitivity only. None of them can be adopted instead of the primary.
+- The Lucid simulator takes one entry a day, so a multi-trade day is folded
+  into one pseudo-trade: points summed, the extra round turns charged inside
+  the points, and the worst intraday loss counted from the day's running
+  result.
+- S5 is run on the live ORB trade list. It is run on an adopted candidate
+  only if one passes.
+- Code: `edge_search_test.py`; tests: `ops/tests/test_edge_search.py`.
