@@ -152,15 +152,17 @@ def run_rules(seq, rule):
 
 # ---------- sequences ----------
 
-def make_seq(trades, cost, slip):
+def make_seq(trades, cost, slip, size=1):
     """(pnl, mae_usd, gap_days) per trade, as lucid pass_rates builds it, plus
-    the calendar days since the previous trade (1 for the first)."""
+    the calendar days since the previous trade (1 for the first). `size` MES
+    contracts: P&L, excursion and costs all scale with it."""
     out, prev = [], None
     for t in trades:
         d = date.fromisoformat(t["date"])
         gap = 1 if prev is None else max(1, (d - prev).days)
         prev = d
-        out.append((lrb.net(t, cost, slip), (t["mae_pts"] + slip * lrb.TICK) * lrb.PV + cost, gap))
+        out.append((size * lrb.net(t, cost, slip),
+                    size * ((t["mae_pts"] + slip * lrb.TICK) * lrb.PV + cost), gap))
     return out
 
 
@@ -267,12 +269,13 @@ def main():
     ap.add_argument("--sims", type=int, default=3000)
     ap.add_argument("--cost", type=float, default=lrb.BASE_COST)
     ap.add_argument("--slip", type=int, default=lrb.BASE_SLIP)
+    ap.add_argument("--size", type=int, default=1, help="MES contracts per trade")
     ap.add_argument("--trades-per-year", type=float, default=TRADES_PER_YEAR)
     a = ap.parse_args()
 
     trades, sessions = lrb.build_trades(lrb.load_days(a.data))
     trades.sort(key=lambda t: t["date"])
-    seq = make_seq(trades, a.cost, a.slip)
+    seq = make_seq(trades, a.cost, a.slip, a.size)
     shown = os.path.relpath(a.data, HERE)
     if shown.startswith(".."):
         shown = a.data
@@ -280,7 +283,7 @@ def main():
     P = print
     P("# Firm fit: the live ORB trades against a table of rule sets\n")
     P(f"Data: `{shown}`, {sessions[0]} to {sessions[-1]}, {len(sessions)} sessions, "
-      f"{len(trades)} trades. Cost ${a.cost:.2f}/RT + {a.slip} tick, 1 MES.\n")
+      f"{len(trades)} trades. Cost ${a.cost:.2f}/RT + {a.slip} tick, {a.size} MES.\n")
     P("Rule sets come from `RULE_SETS` in firm_fit_test.py, taken from FIRM_RULES_SURVEY.md "
       "(search snippets, not verified on the firms' pages). Prices tagged GUESS are stand-ins. "
       "Evaluation stage only: funded-stage rules and payouts are not modelled.\n")

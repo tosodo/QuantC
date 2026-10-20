@@ -159,3 +159,10 @@ def test_monthly_fee_scales_with_time_in_attempt():
     assert slow > fast
     r["monthly_fee"] = 0.0
     assert ff.cost_model(0.5, 0.2, r, 800)["cost"] < slow
+
+
+def test_make_seq_scales_with_size():
+    t = [{"date": "2024-01-02", "pts": 10.0, "mae_pts": 4.0, "entry_t": 1}]
+    one = ff.make_seq(t, 2.5, 1)[0]
+    three = ff.make_seq(t, 2.5, 1, 3)[0]
+    assert abs(three[0] - 3 * one[0]) < 1e-9 and abs(three[1] - 3 * one[1]) < 1e-9
