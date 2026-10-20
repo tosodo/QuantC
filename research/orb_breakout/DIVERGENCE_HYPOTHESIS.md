@@ -1,7 +1,8 @@
 # RSI divergence zones as an ORB filter: pre-registration
 
-Status: PLAN, locked before `divergence_filter_test.py` was run on the
-history. Idea source: the ChartPrime "RSI Momentum Divergence Zones"
+Status: TESTED 2026-10-20, neither rule adopted (see
+[DIVERGENCE_RESULTS.md](DIVERGENCE_RESULTS.md)). This plan was locked
+before `divergence_filter_test.py` was run on the history. Idea source: the ChartPrime "RSI Momentum Divergence Zones"
 indicator (a video walkthrough, no published statistics).
 
 ## Question
