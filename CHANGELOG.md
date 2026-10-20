@@ -7,6 +7,14 @@ first. Each PR adds its own entry in the same PR. Routine log rows
 Format: `date · PR · what changed, and why`. Link the decision or incident
 it implements.
 
+## Unreleased
+- Lucid walk-forward study, not merged and no PR (research only; no live rule, alert or
+  rule number changed, so no DECISIONS entry). `LUCID_WF_HYPOTHESIS.md` pre-registers the
+  criteria, 12 candidates and walk-forward design (commit 057ec38, before any run).
+  `lucid_wf_test.py` is the harness (`threshold` and `run`), with 20 tests in
+  `ops/tests/test_lucid_wf.py`. Lucid price, trail lock, payout cap and cycle length stay
+  unverified.
+
 ## 2026-10-15
 - **#20** Retired the latency probes (D-018, supersedes D-013). The 8:45
   latency check is MES bar freshness alone; the live script's stale guard

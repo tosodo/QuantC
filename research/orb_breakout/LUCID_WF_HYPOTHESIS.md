@@ -141,3 +141,16 @@ fresh, separately pre-registered forward test, never a basis for changing the al
 - Fitting happens on 24 months, enough to rank candidates roughly, not to find small edges.
 - The eval price, trail lock, payout cap and cycle length are unverified (section above).
 - Not modelled: scaling plans, the funded daily loss limit, tax, re-buying after a breach.
+
+## Amendments (2026-10-20, written before any run on real data; the first commit above is unchanged)
+
+1. **Deciding sizes.** Section 2 and criterion 4 both mention the 40% cap. Settled reading:
+   a sequence is judged at a size only if its largest stop is within the cap at that size,
+   so the 125-point candidates are judged at **1 MES only** (41.7% at 2 MES), the 100- and
+   75-point candidates at 1 and 2 MES, and a sequence with a partial exit at 2 MES only.
+   WF uses its largest picked stop. LIVE remains the baseline at every size.
+2. **Step 1 grid.** "Risk per trade" means the loss on a losing trade, not the stop distance.
+   Phase 3 puts the live rules' average loser near $53 per MES (profit factor 1.11, 29% wins,
+   +$4 a trade), far below the $625 stop, so rows of $50 and $100 are added to the grid, and
+   the horizon is 2,000 trades to match `firm_fit_test.py`. The run report adds an
+   out-of-sample profile table (win rate, average win, average loss) for every sequence.
