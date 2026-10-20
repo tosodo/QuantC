@@ -78,6 +78,7 @@ or "Correction" section first.
 | `research/orb_breakout/` | 9:30 ET ORB, long side, MES v2 | **live** (paused, R5) |
 | `research/orb_breakout/` (London) | London-session ORB | tested, see LONDON_RESULTS.md |
 | `research/orb_breakout/` (divergence) | RSI divergence filter on the ORB | tested, not adopted, see DIVERGENCE_RESULTS.md |
+| `research/orb_breakout/` (edge search) | Noise Area, last-half-hour, ATR stop, width gate, sizing | tested, none adopted, see EDGE_SEARCH_RESULTS.md |
 | `research/index_mean_reversion/` | 20-day quintile mean reversion | `promising_but_unproven`; forward-tracked (`forward_log.csv`) |
 | `research/nq_es_relative_value/` | NQ vs ES relative value | plan only |
 | `research/gold_fix_breakout/` | LBMA fix-window breakout on metals | plan only |

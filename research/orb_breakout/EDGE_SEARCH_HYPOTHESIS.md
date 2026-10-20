@@ -1,6 +1,8 @@
 # Edge search: pre-registration of four candidates and a sizing rule
 
-Status: PLAN, locked before any of this code is written or run. Nothing here
+Status: TESTED 2026-10-21, none adopted (see
+[EDGE_SEARCH_RESULTS.md](EDGE_SEARCH_RESULTS.md)). Locked before any of this
+code was written or run. Nothing here
 changes the live script, the live alert or the risk pause.
 
 ## Why
