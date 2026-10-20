@@ -166,3 +166,44 @@ def test_make_seq_scales_with_size():
     one = ff.make_seq(t, 2.5, 1)[0]
     three = ff.make_seq(t, 2.5, 1, 3)[0]
     assert abs(three[0] - 3 * one[0]) < 1e-9 and abs(three[1] - 3 * one[1]) < 1e-9
+
+
+# ---------- funded_stage_test.py ----------
+import funded_stage_test as fs  # noqa: E402
+
+XFA = fs.FUNDED_RULES["Topstep XFA 50K (standard path)"]
+LUCIDF = fs.FUNDED_RULES["Lucid 100K funded"]
+
+
+def test_funded_topstep_pays_after_five_winning_days_then_floor_resets():
+    # five +400 days: balance +2,000; request = min(cap 2000, 0.5 * 2000) = 1000, trader gets 90%
+    out = fs.funded_run(seq(*[(400, 0)] * 5), XFA)
+    assert out["breach"] is None and len(out["payouts"]) == 1
+    assert out["payouts"][0] == (5, 900.0)
+    # after the payout the balance is 51,000 and the floor is the start balance (50,000):
+    # a -1,000 mae touches it, while without the reset a trailing/locked floor would not
+    assert fs.funded_run(seq(*[(400, 0)] * 5, (0, 1000)), XFA)["breach"] == 6
+    assert fs.funded_run(seq(*[(400, 0)] * 5, (0, 999)), XFA)["breach"] is None
+
+
+def test_funded_topstep_needs_the_winning_days_to_be_150_or_more():
+    out = fs.funded_run(seq(*[(100, 0)] * 30), XFA)
+    assert out["payouts"] == []                      # +3,000 profit but no $150 days
+
+
+def test_funded_lucid_consistency_blocks_one_big_day():
+    # reserve 3,100 means nothing is payable below 103,100. One +5,000 day then small days:
+    # best day 5,000 > 40% of any cycle profit < 12,500, so no payout until the share drops
+    out = fs.funded_run(seq((5000, 0), *[(10, 0)] * 5), LUCIDF)
+    assert out["payouts"] == []
+    # spread evenly (+800 x 5 = 4,000, balance 104,000): cycle 4,000, best 800 <= 1,600,
+    # available 900 >= 500 -> pays 90% of 900 on day 5 (day 4 has only 100 available)
+    out = fs.funded_run(seq(*[(800, 0)] * 5), LUCIDF)
+    assert out["payouts"] == [(5, 810.0)]
+
+
+def test_funded_breach_ends_the_account_and_horizon_is_respected():
+    out = fs.funded_run(seq((0, 2000)), XFA)          # low 48,000 = start - dd -> breach
+    assert out["breach"] == 1
+    out = fs.funded_run(seq(*[(400, 0)] * 40), XFA, horizon=5)
+    assert out["n"] == 5 and len(out["payouts"]) == 1
