@@ -19,6 +19,10 @@ it implements.
   looks, trades and years needed for t = 3, and Lucid pass odds from a closed form (checked
   against the rule-engine simulation) and an optional bootstrap; `plan` gives the edge a
   target pass rate needs. 9 tests in `ops/tests/test_edge_calculator.py`.
+- `research/orb_breakout/ORB_REPLICATION_HYPOTHESIS.md`: pre-registration (before any data
+  pull or code) of an unchanged-rule ORB-long replication on ES, NQ and YM over 2010-2021,
+  with day-clustered inference and fixed confirm, falsify and inconclusive rules. Research
+  only; no rule changed. Lucid price, trail lock, payout cap and cycle length stay unverified.
 
 ## 2026-10-15
 - **#20** Retired the latency probes (D-018, supersedes D-013). The 8:45
