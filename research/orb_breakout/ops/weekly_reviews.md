@@ -71,3 +71,28 @@ Go/no-go: 2 GO (29, 30 Sep), 3 NO-GO (28 Sep: data delay 600 s and tool error; 1
 **Open items (user):** say "resume" when ready (R5; the qty-1 stale-guard alert 5849779220 is already deployed and passes the audit); a fresh Lucid balance for account.csv (anchor 24 Sep is over 2 weeks old); Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. Live alert expiry 14 Dec (58 days).
 
 **Proposed change:** none to the strategy. Before saying "resume", add a current Lucid balance to account.csv so R3 is checked against a real buffer rather than a 3-week-old estimate.
+
+## Week of 2026-10-19 (written 2026-10-23, Friday data incomplete)
+
+**Days:** 0 live, 3 shadow, 1 no-breakout (Mon-Thu); Fri 23 Oct not journaled: the TradingView connector lost authorisation before the 4:15 close, so the close routine and the bar/alert-log pulls could not run. Go/no-go: 0 GO, 5 NO-GO, every day for the R5 risk pause. Bar freshness: 19 Oct 50s, 20 Oct 12s, 21 Oct 25s, 22 Oct 41s, 23 Oct 54s. The 9:50 watch was OK on all five days (no live fires).
+
+| date | status | entry | exit (reason) | signal P&L (1 MES) |
+|---|---|---|---|---|
+| 19 Oct | shadow, down-break-first | 7752.5 10:15 | 7749.5 12:03 (90 min) | -15.00 |
+| 20 Oct | shadow | 7735.75 09:54 | 7759 16:00 (session close) | +116.25 |
+| 21 Oct | shadow, down-break-first | 7781 11:11 | 7778.75 15:02 (90 min) | -11.25 |
+| 22 Oct | no breakout (range 7725-7740.75) | - | - | - |
+| 23 Oct | not recorded (connector down at close) | - | - | - |
+
+**Totals (Mon-Thu):** shadow signal P&L +90.00 over 3 entries. Live P&L 0 (alert off all week).
+**Execution:** no live fires, so no lag or slippage data. No reconcile flags.
+**Down-break-first:** 2 entries (19 and 21 Oct), -26.25 combined.
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, 29 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place. No alert was restarted outside the routines.
+
+**Against expectations:** 3 signal entries (Mon-Thu) vs about 2.6 a week; average +30 a trade vs about +11, driven by one +116 day. No full stop. One week, all shadow, is noise; no conclusions.
+
+**Records:** failed control this week: the TradingView connector needed re-authorisation on 23 Oct, so the 4:15 close and this review ran without Friday data. Propose a short incident record in docs/incidents/. No decision changed this week.
+
+**Open items (user):** re-authorise the TradingView connector, then confirm flat in Tradovate for 23 Oct (could not be checked); say "resume" when ready (R5); a fresh Lucid balance for account.csv (anchor over 2 weeks old); Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. Live alert expiry 14 Dec (51 days).
+
+**Proposed change:** none to the strategy. Operational: add a connector-health line to the 8:45 check output so a lapsed authorisation is caught before the close, not at it.
