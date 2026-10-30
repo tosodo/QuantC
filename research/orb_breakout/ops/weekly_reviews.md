@@ -96,3 +96,19 @@ Go/no-go: 2 GO (29, 30 Sep), 3 NO-GO (28 Sep: data delay 600 s and tool error; 1
 **Open items (user):** re-authorise the TradingView connector, then confirm flat in Tradovate for 23 Oct (could not be checked); say "resume" when ready (R5); a fresh Lucid balance for account.csv (anchor over 2 weeks old); Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. Live alert expiry 14 Dec (51 days).
 
 **Proposed change:** none to the strategy. Operational: add a connector-health line to the 8:45 check output so a lapsed authorisation is caught before the close, not at it.
+
+## Week of 2026-10-26 (written 2026-10-30, no market data)
+
+**Days:** no journal rows for the week. The TradingView connector lost authorisation before the 23 Oct close and was still unauthorised all week, so no alert log, alert list or MES bars could be read and no shadow replay was possible (journal ends 22 Oct). Go/no-go: 0 GO, 5 NO-GO, every day for the R5 risk pause plus "cannot verify" (MCP down). The 9:50 watch logged MCP_DOWN on all five days with a push notification each time. Bar freshness: not measured.
+
+**Totals:** shadow signal P&L unknown. Live P&L 0 only by inference: the live alert was last seen inactive on 23 Oct 12:46 UTC and RISK_PAUSE was in place all week, but neither the alert state nor Tradovate could be checked.
+**Execution:** no data. No lag, slippage or reconcile flags could be computed.
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, now 36 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place.
+
+**Against expectations:** nothing to compare. No conclusions.
+
+**Records:** failed control: the daily checks (8:45, 9:50, 4:15) have been blind since 23 Oct. This needs an incident record in docs/incidents/ (proposed, not yet written): detection worked (push on each 9:50), but the 4:15 and weekly outputs carried no data and the alert state went unverified for 6 trading days.
+
+**Open items (user):** re-authorise the TradingView connector (the only blocker), then check the live alert is off and Tradovate is flat; then Claude rebuilds journal rows for 23 and 26-30 Oct from the MES bars and alert log (bars may only reach back a few days on 1m, so some days may be unrecoverable); say "resume" when ready (R5); a fresh Lucid balance for account.csv (anchor over 5 weeks old); Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. Live alert expiry 14 Dec (45 days).
+
+**Proposed change:** none to the strategy. Operational: add a connector-health line to the 8:45 check so a lapsed authorisation is caught before the close, and have the weekly review flag more than 2 consecutive no-data days as an incident.
