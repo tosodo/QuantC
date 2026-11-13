@@ -128,3 +128,19 @@ Go/no-go: 2 GO (29, 30 Sep), 3 NO-GO (28 Sep: data delay 600 s and tool error; 1
 **Open items (user):** re-authorise the TradingView connector in claude.ai connector settings (the only blocker); then check the live alert is off and Tradovate is flat; say "resume" when ready (R5); a fresh Lucid balance for account.csv; Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. The routine clocks also shifted an hour after US clocks went back on 1 Nov; check the 8:45/9:50/4:15/4:40 ET triggers still match the sessions. Live alert expiry 14 Dec (38 days).
 
 **Proposed change:** none to the strategy. Operational: if the user wants these routines paused until the connector is back, say "pause the routines" and I will disable them rather than log empty rows.
+
+## Week of 2026-11-09 (written 2026-11-13, no market data)
+
+**Days:** no journal rows for the week (journal still ends 22 Oct). The TradingView connector has still needed re-authorisation, so for the fourth week in a row no alert log, alert list or MES bars could be read and no shadow replay was possible. Go/no-go: 0 GO, 5 NO-GO (9-13 Nov), every day for the R5 risk pause plus "cannot verify" (MCP down). The 9:50 watch logged MCP_DOWN with a push notification each day. The 4:15 close reported "could not run" each day. Bar freshness: not measured.
+
+**Totals:** shadow signal P&L unknown. Live P&L 0 only by inference: the live alert was last seen inactive on 23 Oct 12:46 UTC and RISK_PAUSE has been in place throughout, but neither alert state nor Tradovate has been checked for 3 weeks.
+**Execution:** no data. No lag, slippage or reconcile flags could be computed.
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, now 50 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place.
+
+**Against expectations:** nothing to compare. No conclusions.
+
+**Records:** the control failure is still open and has now run for 15 trading days (23 Oct to 13 Nov). Detection worked (a push every morning) but the connector has not been re-authorised. The incident record in docs/incidents/ is still proposed, not written. 1-minute bars before about 9 Nov are probably no longer recoverable from TradingView, so the missed shadow days may stay blank.
+
+**Open items (user):** re-authorise the TradingView connector in claude.ai connector settings (the only blocker); then check the live alert is off and Tradovate is flat; say "resume" when ready (R5); a fresh Lucid balance for account.csv; Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed; Databento quotes and spend ceiling ($97.49 balance); Mac realism-audit run. Check the 8:45/9:50/4:15/4:40 ET triggers still match the sessions after the 1 Nov clock change. Live alert expiry 14 Dec (31 days).
+
+**Proposed change:** none to the strategy. Operational: if the user wants these routines paused until the connector is back, say "pause the routines" and I will disable them rather than log empty rows.
