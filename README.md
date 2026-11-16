@@ -11,6 +11,7 @@ the daily routines. The user decides anything that changes risk.
 |---|---|
 | What's running right now, and how is it set up? | [`research/orb_breakout/SETUP_GUIDE.md`](research/orb_breakout/SETUP_GUIDE.md) |
 | What blocks it from going live again? | [`research/orb_breakout/ops/PRODUCTION_READINESS.md`](research/orb_breakout/ops/PRODUCTION_READINESS.md) |
+| How do I use the TradingView connector, and what if it goes down? | [`docs/TRADINGVIEW_MCP_GUIDE.md`](docs/TRADINGVIEW_MCP_GUIDE.md) |
 | Why are the rules what they are? | [`docs/DECISIONS.md`](docs/DECISIONS.md) |
 | What went wrong before, and what did we change? | [`docs/incidents/`](docs/incidents/README.md) |
 | What changed, when? | [`CHANGELOG.md`](CHANGELOG.md) |
