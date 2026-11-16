@@ -30,13 +30,23 @@ Live trading should resume only when every **blocking** row is ready.
 ## 1. Live alert
 
 **In place**
-- Alert 5849779220, created 15 Oct 2026 01:30Z from the repo's
-  `orb_long_mes_v2.pine`: qty 1, test mode off, $625, 90 min, stale guard
-  on at 90 s, Ghost webhook, expires 14 Dec. Left stopped; the 8:45 check
-  starts it on a GO day. The 9 Sep qty-2 build (5571966155) is deleted.
-  The go/no-go alert audit passes (closes G1.1).
+- Alert 6073505338 "QuantC ORB Lucid - LIVE 1c", created by the user on
+  15 Nov 2026 on MNQ1! 1m (D-019): qty 1, test mode off, Ghost webhook,
+  active, expires 14 Jan 2027. It runs the original long-only ORB script:
+  hold to the close, no script stop, no stale-data guard.
+- The MES v2 alert 5849779220 is deleted. The repo's
+  `orb_long_mes_v2.pine` is not deployed.
 
 **Gaps**
+- **G1.4 The live alert is outside every check.** `checks.py` finds the
+  live alert by its MES v2 name, reads qty from the name and the guard
+  from the creation date. The MNQ alert matches none of these, so the
+  8:45 gate, the 9:50 watch, the close reconcile and R1 to R5 do not see
+  it. It trades while `RISK_PAUSE` is in place. `shadow_day.py` replays
+  MES v2 rules, not this script's.
+- **G1.5 No stop from the script.** The buy message carries no `sl`.
+  Whether Ghost applies a fallback stop on this ticker is unconfirmed
+  (see the 2026-08-27 incident).
 - **G1.2 Untested rule: down-break-first days.** The live script trades
   days where price broke below the range first. The 77.8% research
   skipped those days. `live_rules_backtest.py` answers this, but its
@@ -47,6 +57,10 @@ Live trading should resume only when every **blocking** row is ready.
   `mes_c1_stop_rerun.py`, aren't in the repo.
 
 **Fixes**
+- **G1.4 (user, then Claude):** decide D-020. If the alert comes under
+  the routines, Claude changes `checks.py`, the shadow replay and the
+  checklists by PR, with tests.
+- **G1.5 (user):** confirm the Ghost stop settings on the MNQ ticker.
 - **G1.2 (user + Claude):** run `live_rules_backtest.py >
   phase3_report.md` on the machine with the data, then commit the report
   and `phase3_trades.csv`. Then decide on down-break-first days: keep
@@ -154,11 +168,16 @@ than 7 days old.
 - **G6.1 Single dependency on the TradingView MCP.** If it's down at 8:45
   the verdict is NO-GO. If it's down at 4:15, the user is asked to confirm
   they're flat. That's safe but manual.
+- **G6.3 Outage warnings do not escalate.** The same push went out for
+  15 trading days (26 Oct to 13 Nov) and 12 journal days were lost for
+  good. See the 2026-10-26 incident.
 - **G6.2 Fragile state branch.** State lives on a working branch that is
   reset after each merge.
 
 **Fixes**
 - **G6.1:** accept as is for now. The failure mode is safe.
+- **G6.3 (Claude, if approved):** after two days down, the push says what
+  is being lost and by when. Guide: `docs/TRADINGVIEW_MCP_GUIDE.md`.
 - **G6.2 (Claude):** always merge before resetting, as now. Move state to
   `main` via a dedicated PR if it becomes a problem.
 

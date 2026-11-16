@@ -6,28 +6,37 @@ first built, the v1 script, and every past status update are frozen in
 [`archive/…/SETUP_GUIDE_2026-08-27_to_2026-10-15.md`](../../archive/research/orb_breakout/SETUP_GUIDE_2026-08-27_to_2026-10-15.md).
 What went wrong and what it taught us is in [`docs/incidents/`](../../docs/incidents/).
 
-## Current state (checked 2026-10-15)
+## Current state (checked 2026-11-16)
 
 - **Account:** Lucid LucidPro $100K evaluation on Tradovate account
   LTE10089070250001. It's **simulated**: what's at risk is the evaluation
   fee, not trading capital.
-- **Trading:** paused by risk rule R5 since 30 Sep (`ops/RISK_PAUSE`). It
-  resumes only when you say "resume" (`ops/RISK_RULES.md`).
-- **What blocks going live again:** the blocking rows in
+- **What is live:** an MNQ alert the user created on 15 Nov (D-019). It
+  sends real orders to Ghost at 1 contract.
+- **The routines do not cover it.** The 8:45 check, the 9:50 watch, the
+  close reconcile and the risk rules all look for the MES v2 alert by
+  name, and that alert no longer exists. So every morning is NO-GO on
+  paper while the MNQ alert trades ungated (gap G1.4, decision D-020).
+- **Risk pause:** `ops/RISK_PAUSE` (R5) is still in place. The user has
+  not said "resume". It does not stop the MNQ alert.
+- **What blocks going live under the routines:** the blocking rows in
   [`ops/PRODUCTION_READINESS.md`](ops/PRODUCTION_READINESS.md).
 
 **TradingView alerts**
 
 | alert | id | symbol | state |
 |---|---|---|---|
-| QuantC ORB Long MES v2 (validated) - Ghost (Accessible) (1, 625, 90, 300, 90, …) | 5849779220 | MES1! 1m | Live alert, created 15 Oct from `orb_long_mes_v2.pine`: qty 1, stale guard on. **Stopped**; the 8:45 check starts it on a GO day. Expires 14 Dec. |
-| QuantC Noise-Area MNQ - PAPER TEST ONLY | 5760603790 | MNQ1! 30m | Active, `"test":true`, paper only. Expires 2 Dec. |
+| QuantC ORB Lucid - LIVE 1c | 6073505338 | MNQ1! 1m | **Active**, created 15 Nov by the user. Script "QuantC ORB Long (validated) - Ghost alerts" v2.0 (saved on TradingView as "QuantC ORB Lucid - Ghost dry run"): qty 1, test mode off, Ghost webhook. Long only, entry on the first 1m close above the 9:30 to 9:44 range, exit on the 15:59 bar. **The script sends no stop and has no stale-data guard.** Expires 14 Jan 2027. |
+| QuantC Noise-Area MNQ - PAPER TEST ONLY | 5760603790 | MNQ1! 30m | Inactive, `"test":true`, paper only. Last fired 23 Oct. Expires 2 Dec. |
 
-## The live script
+There is no MES v2 alert. 5849779220 was deleted between 23 Oct and
+16 Nov.
+
+## The MES v2 script (tested, not deployed)
 
 [`orb_long_mes_v2.pine`](orb_long_mes_v2.pine). Its indicator name is
 "QuantC ORB Long MES v2 (validated) - Ghost (Accessible)", and the routines
-find the alert by that name. It runs on **MES1!, 1-minute** only: any other
+find the alert by that name. No alert runs it at present. It runs on **MES1!, 1-minute** only: any other
 symbol or timeframe is a hard gate, and no signal fires.
 
 - **Range:** 9:30–9:44 ET. **Entry:** the first 1m close above the range

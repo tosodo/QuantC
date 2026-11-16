@@ -1,2 +1,4 @@
 time_utc,alert_id,action,requested_by,active_after,guard_version,notes
 2026-09-28T22:37Z,5571966155,restart,user,true,false,user asked to reinstate the live alert after two on-time DEMO probe fires (19:15 and 22:18 UTC) - 9 Sep build without the stale-data guard - 8:45 go/no-go still gates it
+2026-11-15T09:36Z,6073505338,create,user,true,false,user created 'QuantC ORB Lucid - LIVE 1c' on MNQ1! 1m outside the routines (D-019) - script 'QuantC ORB Long (validated) - Ghost alerts' v2.0 - qty 1 - test mode off - Ghost webhook - no script stop - no stale-data guard - expires 2027-01-14 - recorded 16 Nov when the connector came back
+2026-11-16T09:54Z,5849779220,found_deleted,not recorded,missing,true,MES v2 live alert no longer exists - last seen inactive 23 Oct - deleted at an unknown time during the connector outage - its fire history went with it

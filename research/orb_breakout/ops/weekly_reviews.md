@@ -144,3 +144,26 @@ Go/no-go: 2 GO (29, 30 Sep), 3 NO-GO (28 Sep: data delay 600 s and tool error; 1
 **Open items (user):** re-authorise the TradingView connector in claude.ai connector settings (the only blocker); then check the live alert is off and Tradovate is flat; say "resume" when ready (R5); a fresh Lucid balance for account.csv; Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed; Databento quotes and spend ceiling ($97.49 balance); Mac realism-audit run. Check the 8:45/9:50/4:15/4:40 ET triggers still match the sessions after the 1 Nov clock change. Live alert expiry 14 Dec (31 days).
 
 **Proposed change:** none to the strategy. Operational: if the user wants these routines paused until the connector is back, say "pause the routines" and I will disable them rather than log empty rows.
+
+## Correction to the weeks of 2026-10-26, 2026-11-02 and 2026-11-09 (written 2026-11-16)
+
+The TradingView connector was re-authorised on 16 Nov. What could be recovered:
+
+**Backfilled shadow days (MES v2 rules, 1 MES):** TradingView's 1-minute history now starts on 10 Nov, so only the last four days could be replayed.
+
+| date | entry | exit (reason) | signal P&L (1 MES) |
+|---|---|---|---|
+| 10 Nov | 7541.5 09:57 | 7515.5 11:27 (90 min) | -130.00 |
+| 11 Nov | 7626.5 10:52 | 7642.5 16:00 (session close), down-break-first | +80.00 |
+| 12 Nov | 7628.25 09:52 | 7626.25 14:03 (90 min) | -10.00 |
+| 13 Nov | none (no breakout) | | |
+
+**Totals, 10 to 13 Nov:** shadow signal P&L -60.00 over 3 entries. No full stop.
+
+**Not recoverable:** 23 Oct to 9 Nov, 12 trading days. Those journal rows stay blank unless the bars are bought from Databento.
+
+**Alert state found on 16 Nov:** the MES v2 alert 5849779220 no longer exists, so its fire history is gone and "no live MES fires during the outage" cannot be proven from TradingView. A new alert, 6073505338 "QuantC ORB Lucid - LIVE 1c" on MNQ1!, was created by the user on 15 Nov and is active (D-019). It had not fired by 09:54 UTC on 16 Nov.
+
+**Data feed:** MES bars 20 s fresh on 16 Nov; `update_mode` streaming.
+
+**Records:** incident written, `docs/incidents/2026-10-26_tradingview-connector-outage.md`.

@@ -76,7 +76,7 @@ or "Correction" section first.
 
 | folder | what | status |
 |---|---|---|
-| `research/orb_breakout/` | 9:30 ET ORB, long side, MES v2 | **live** (paused, R5) |
+| `research/orb_breakout/` | 9:30 ET ORB, long side | **live** on MNQ since 15 Nov (D-019), outside the routines (D-020 pending). MES v2 is tested but not deployed |
 | `research/orb_breakout/` (London) | London-session ORB | tested, see LONDON_RESULTS.md |
 | `research/orb_breakout/` (divergence) | RSI divergence filter on the ORB | tested, not adopted, see DIVERGENCE_RESULTS.md |
 | `research/orb_breakout/` (edge search) | Noise Area, last-half-hour, ATR stop, width gate, sizing | tested, none adopted, see EDGE_SEARCH_RESULTS.md |

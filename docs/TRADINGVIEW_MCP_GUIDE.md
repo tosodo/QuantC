@@ -97,8 +97,8 @@ PR to a checklist before a routine relies on it.
 
 - **One-minute history is about a week deep.** Older days return "no
   bars". A missed close routine must be backfilled within days. For older
-  one-minute data, use the Databento download script on the research
-  branch.
+  one-minute data, use `research/orb_breakout/fetch_data.py` (Databento,
+  paid).
 - **One call returns at most 5,000 bars as rows**, or 8,000 with `format`
   set to `columns`. For more, page back using `next_date_to`.
 - **Deleting an alert deletes its fire history.** Save the alert log
