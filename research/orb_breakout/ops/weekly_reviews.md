@@ -46,3 +46,101 @@ Go/no-go: 2 GO (29, 30 Sep), 3 NO-GO (28 Sep: data delay 600 s and tool error; 1
 **Open items (user):** set the live alert's qty input to 1 and say "resume" (R5); restart the DEMO probe alerts, which also expire 21 Oct; Lucid P&L for 21 Sep, 30 Sep and 2 Oct; a fresh Lucid balance (anchor 24 Sep is now over 2 weeks old); Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission, alert redeploy with stale guard); phase3_report.md not committed. Live alert expiry 25 Nov (47 days).
 
 **Proposed change (operational, not strategy):** before resuming, redeploy the stale-guard script as a new alert with qty 1 and delete 5571966155. Evidence: R5 has blocked trading all week, and the redeploy fixes the size and the missing guard in one step.
+
+## Week of 2026-10-12 (written 2026-10-16)
+
+**Days:** 0 live, 2 shadow, 3 no-breakout, 0 stale-skip, 0 missed. Go/no-go: 0 GO, 5 NO-GO, every day for the R5 risk pause. Latency: 12-14 Oct "FAIL (unknown)" because the DEMO probes were paused; probes retired by D-018 (#20) on 15 Oct. Bar freshness since then: 15 Oct fresh 9s, 16 Oct fresh 16s. The 9:50 watch ran from 15 Oct: OK both days, no live fires.
+
+| date | status | entry | exit (reason) | signal P&L (1 MES) |
+|---|---|---|---|---|
+| 12 Oct | no breakout (range 7862.25-7870) | - | - | - |
+| 13 Oct | no breakout (range 7847-7863.25) | - | - | - |
+| 14 Oct | shadow, CPI day | 7835.5 09:48 | 7796 11:18 (90 min) | -197.50 |
+| 15 Oct | shadow, PPI/Retail Sales, down-break-first | 7753 10:11 | 7790.75 16:00 (session close) | +188.75 |
+| 16 Oct | no breakout (range 7780.75-7803) | - | - | - |
+
+**Totals:** shadow signal P&L -8.75 (1 MES) over 2 entries. Live P&L 0 (alert off all week).
+**Execution:** no live fires, so no lag or slippage data. Flags: none from the close reconcile.
+**Down-break-first:** 1 entry (15 Oct, +188.75).
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, now 22 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place. No alert was restarted outside the routines.
+
+**Against expectations:** 2 signal entries vs about 2.6 a week; average -4.38 a trade vs about +11. The loser was cut by the 90-minute exit (no full stop), which fits the expected pattern. One week, all shadow, is noise; no conclusions. Running totals wait for 4 weeks of live rows (2 live rows so far).
+
+**Records:** D-018 (probes retired) is in DECISIONS.md. No URGENT flag, failed control or new kind of NO-GO this week, so no new incident record needed.
+
+**Open items (user):** say "resume" when ready (R5; the qty-1 stale-guard alert 5849779220 is already deployed and passes the audit); a fresh Lucid balance for account.csv (anchor 24 Sep is over 2 weeks old); Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. Live alert expiry 14 Dec (58 days).
+
+**Proposed change:** none to the strategy. Before saying "resume", add a current Lucid balance to account.csv so R3 is checked against a real buffer rather than a 3-week-old estimate.
+
+## Week of 2026-10-19 (written 2026-10-23, Friday data incomplete)
+
+**Days:** 0 live, 3 shadow, 1 no-breakout (Mon-Thu); Fri 23 Oct not journaled: the TradingView connector lost authorisation before the 4:15 close, so the close routine and the bar/alert-log pulls could not run. Go/no-go: 0 GO, 5 NO-GO, every day for the R5 risk pause. Bar freshness: 19 Oct 50s, 20 Oct 12s, 21 Oct 25s, 22 Oct 41s, 23 Oct 54s. The 9:50 watch was OK on all five days (no live fires).
+
+| date | status | entry | exit (reason) | signal P&L (1 MES) |
+|---|---|---|---|---|
+| 19 Oct | shadow, down-break-first | 7752.5 10:15 | 7749.5 12:03 (90 min) | -15.00 |
+| 20 Oct | shadow | 7735.75 09:54 | 7759 16:00 (session close) | +116.25 |
+| 21 Oct | shadow, down-break-first | 7781 11:11 | 7778.75 15:02 (90 min) | -11.25 |
+| 22 Oct | no breakout (range 7725-7740.75) | - | - | - |
+| 23 Oct | not recorded (connector down at close) | - | - | - |
+
+**Totals (Mon-Thu):** shadow signal P&L +90.00 over 3 entries. Live P&L 0 (alert off all week).
+**Execution:** no live fires, so no lag or slippage data. No reconcile flags.
+**Down-break-first:** 2 entries (19 and 21 Oct), -26.25 combined.
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, 29 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place. No alert was restarted outside the routines.
+
+**Against expectations:** 3 signal entries (Mon-Thu) vs about 2.6 a week; average +30 a trade vs about +11, driven by one +116 day. No full stop. One week, all shadow, is noise; no conclusions.
+
+**Records:** failed control this week: the TradingView connector needed re-authorisation on 23 Oct, so the 4:15 close and this review ran without Friday data. Propose a short incident record in docs/incidents/. No decision changed this week.
+
+**Open items (user):** re-authorise the TradingView connector, then confirm flat in Tradovate for 23 Oct (could not be checked); say "resume" when ready (R5); a fresh Lucid balance for account.csv (anchor over 2 weeks old); Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. Live alert expiry 14 Dec (51 days).
+
+**Proposed change:** none to the strategy. Operational: add a connector-health line to the 8:45 check output so a lapsed authorisation is caught before the close, not at it.
+
+## Week of 2026-10-26 (written 2026-10-30, no market data)
+
+**Days:** no journal rows for the week. The TradingView connector lost authorisation before the 23 Oct close and was still unauthorised all week, so no alert log, alert list or MES bars could be read and no shadow replay was possible (journal ends 22 Oct). Go/no-go: 0 GO, 5 NO-GO, every day for the R5 risk pause plus "cannot verify" (MCP down). The 9:50 watch logged MCP_DOWN on all five days with a push notification each time. Bar freshness: not measured.
+
+**Totals:** shadow signal P&L unknown. Live P&L 0 only by inference: the live alert was last seen inactive on 23 Oct 12:46 UTC and RISK_PAUSE was in place all week, but neither the alert state nor Tradovate could be checked.
+**Execution:** no data. No lag, slippage or reconcile flags could be computed.
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, now 36 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place.
+
+**Against expectations:** nothing to compare. No conclusions.
+
+**Records:** failed control: the daily checks (8:45, 9:50, 4:15) have been blind since 23 Oct. This needs an incident record in docs/incidents/ (proposed, not yet written): detection worked (push on each 9:50), but the 4:15 and weekly outputs carried no data and the alert state went unverified for 6 trading days.
+
+**Open items (user):** re-authorise the TradingView connector (the only blocker), then check the live alert is off and Tradovate is flat; then Claude rebuilds journal rows for 23 and 26-30 Oct from the MES bars and alert log (bars may only reach back a few days on 1m, so some days may be unrecoverable); say "resume" when ready (R5); a fresh Lucid balance for account.csv (anchor over 5 weeks old); Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. Live alert expiry 14 Dec (45 days).
+
+**Proposed change:** none to the strategy. Operational: add a connector-health line to the 8:45 check so a lapsed authorisation is caught before the close, and have the weekly review flag more than 2 consecutive no-data days as an incident.
+
+## Week of 2026-11-02 (written 2026-11-06, no market data)
+
+**Days:** no journal rows for the week (journal still ends 22 Oct). The TradingView connector has needed re-authorisation since before the 23 Oct close, so for the third week in a row no alert log, alert list or MES bars could be read and no shadow replay was possible. Go/no-go: 0 GO, 5 NO-GO (2-6 Nov), every day for the R5 risk pause plus "cannot verify" (MCP down). The 9:50 watch logged MCP_DOWN with a push notification on all five days. The 4:15 close reported "could not run" each day. Bar freshness: not measured.
+
+**Totals:** shadow signal P&L unknown. Live P&L 0 only by inference: the live alert was last seen inactive on 23 Oct 12:46 UTC and RISK_PAUSE has been in place throughout, but neither alert state nor Tradovate has been checked for 2 weeks.
+**Execution:** no data. No lag, slippage or reconcile flags could be computed.
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, now 43 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place.
+
+**Against expectations:** nothing to compare. No conclusions.
+
+**Records:** the control failure from last week is still open and has now run for 10 trading days (23 Oct to 6 Nov). Detection worked (a push every morning) but nobody has re-authorised the connector. An incident record in docs/incidents/ is still proposed, not written. The 1-minute bars for 23 Oct to 29 Oct are probably no longer recoverable from TradingView; the missed shadow days may stay blank.
+
+**Open items (user):** re-authorise the TradingView connector in claude.ai connector settings (the only blocker); then check the live alert is off and Tradovate is flat; say "resume" when ready (R5); a fresh Lucid balance for account.csv; Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed. The routine clocks also shifted an hour after US clocks went back on 1 Nov; check the 8:45/9:50/4:15/4:40 ET triggers still match the sessions. Live alert expiry 14 Dec (38 days).
+
+**Proposed change:** none to the strategy. Operational: if the user wants these routines paused until the connector is back, say "pause the routines" and I will disable them rather than log empty rows.
+
+## Week of 2026-11-09 (written 2026-11-13, no market data)
+
+**Days:** no journal rows for the week (journal still ends 22 Oct). The TradingView connector has still needed re-authorisation, so for the fourth week in a row no alert log, alert list or MES bars could be read and no shadow replay was possible. Go/no-go: 0 GO, 5 NO-GO (9-13 Nov), every day for the R5 risk pause plus "cannot verify" (MCP down). The 9:50 watch logged MCP_DOWN with a push notification each day. The 4:15 close reported "could not run" each day. Bar freshness: not measured.
+
+**Totals:** shadow signal P&L unknown. Live P&L 0 only by inference: the live alert was last seen inactive on 23 Oct 12:46 UTC and RISK_PAUSE has been in place throughout, but neither alert state nor Tradovate has been checked for 3 weeks.
+**Execution:** no data. No lag, slippage or reconcile flags could be computed.
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, now 50 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place.
+
+**Against expectations:** nothing to compare. No conclusions.
+
+**Records:** the control failure is still open and has now run for 15 trading days (23 Oct to 13 Nov). Detection worked (a push every morning) but the connector has not been re-authorised. The incident record in docs/incidents/ is still proposed, not written. 1-minute bars before about 9 Nov are probably no longer recoverable from TradingView, so the missed shadow days may stay blank.
+
+**Open items (user):** re-authorise the TradingView connector in claude.ai connector settings (the only blocker); then check the live alert is off and Tradovate is flat; say "resume" when ready (R5); a fresh Lucid balance for account.csv; Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed; Databento quotes and spend ceiling ($97.49 balance); Mac realism-audit run. Check the 8:45/9:50/4:15/4:40 ET triggers still match the sessions after the 1 Nov clock change. Live alert expiry 14 Dec (31 days).
+
+**Proposed change:** none to the strategy. Operational: if the user wants these routines paused until the connector is back, say "pause the routines" and I will disable them rather than log empty rows.

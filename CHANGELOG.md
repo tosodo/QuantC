@@ -7,6 +7,29 @@ first. Each PR adds its own entry in the same PR. Routine log rows
 Format: `date · PR · what changed, and why`. Link the decision or incident
 it implements.
 
+## Unreleased
+- Lucid walk-forward study, not merged and no PR (research only; no live rule, alert or
+  rule number changed, so no DECISIONS entry). `LUCID_WF_HYPOTHESIS.md` pre-registers the
+  criteria, 12 candidates and walk-forward design (commit 057ec38, before any run).
+  `lucid_wf_test.py` is the harness (`threshold` and `run`), with 20 tests in
+  `ops/tests/test_lucid_wf.py`. Lucid price, trail lock, payout cap and cycle length stay
+  unverified.
+- `research/orb_breakout/edge_calculator.py` (research only; no rule changed): `measure`
+  reports mean, sd, t, a block-bootstrap interval, the Deflated Sharpe probability for N
+  looks, trades and years needed for t = 3, and Lucid pass odds from a closed form (checked
+  against the rule-engine simulation) and an optional bootstrap; `plan` gives the edge a
+  target pass rate needs. 9 tests in `ops/tests/test_edge_calculator.py`.
+- `research/orb_breakout/ORB_REPLICATION_HYPOTHESIS.md`: pre-registration (before any data
+  pull or code) of an unchanged-rule ORB-long replication on ES, NQ and YM over 2010-2021,
+  with day-clustered inference and fixed confirm, falsify and inconclusive rules. Research
+  only; no rule changed. Lucid price, trail lock, payout cap and cycle length stay unverified.
+- `research/orb_breakout/audit_repaint.py` (read-only; no rule, alert or data changed): checks
+  bar integrity, session timestamps and DST, contract rolls, and per-trade fill realism
+  (entry at next open, stop gaps, exit at next open) with the net per trade before and after
+  measured fills; optional TradingView MES comparison. 8 tests in
+  `ops/tests/test_audit_repaint.py`. Lucid price, trail lock, payout cap and cycle length
+  stay unverified.
+
 ## 2026-10-15
 - **#20** Retired the latency probes (D-018, supersedes D-013). The 8:45
   latency check is MES bar freshness alone; the live script's stale guard
