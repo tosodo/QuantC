@@ -144,3 +144,19 @@ Go/no-go: 2 GO (29, 30 Sep), 3 NO-GO (28 Sep: data delay 600 s and tool error; 1
 **Open items (user):** re-authorise the TradingView connector in claude.ai connector settings (the only blocker); then check the live alert is off and Tradovate is flat; say "resume" when ready (R5); a fresh Lucid balance for account.csv; Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); phase3_report.md not committed; Databento quotes and spend ceiling ($97.49 balance); Mac realism-audit run. Check the 8:45/9:50/4:15/4:40 ET triggers still match the sessions after the 1 Nov clock change. Live alert expiry 14 Dec (31 days).
 
 **Proposed change:** none to the strategy. Operational: if the user wants these routines paused until the connector is back, say "pause the routines" and I will disable them rather than log empty rows.
+
+## Week of 2026-11-16 (written 2026-11-20, market data for Mon-Wed only)
+
+**Days:** the connector is back, so this is the first week with data since October. Journal rows for Mon-Wed (16-18 Nov): all `no_breakout`. No row for Thu 19 or Fri 20: the TradingView tool quota ran out before the 4:15 close both days, so the close check could not run (the 9:50 watches on both days were OK: both alerts inactive, no fires). Go/no-go: 0 GO, 5 NO-GO, every day for the R5 risk pause plus `no_live_alert` (the MES v2 alert 5849779220 no longer exists). Bar freshness at 8:45: 27, 36, 55, 26 and 55 s (all PASS).
+
+**Totals:** shadow signal P&L 0 (no entries on the 3 days checked). Live P&L 0: no fires on any alert all week, and every alert was inactive at the closes that ran, apart from Mon and Tue when the new MNQ1! alert was active (see below).
+**Execution:** no live fires, so no lag or slippage. No flags.
+**Risk:** buffer 2738.50 estimated (anchor 24 Sep, now 57 days old), week live P&L 0, consecutive stops 0, R5_size still tripped and RISK_PAUSE in place.
+
+**Against expectations:** nothing to compare. 0 trades against about 2.6 expected is normal for one week and means nothing. The market fell about 440 points over the week on MES (range highs 7538.75 on Mon down to 7389 on Wed, and about 7116 on Fri morning), so none of the Mon-Wed ranges broke upward.
+
+**Records:** (1) new control gap: the checks only look for the MES v2 alert by name. A new active MNQ1! alert "QuantC ORB Lucid - LIVE 1c" (6073505338) ran Sun 15 Nov to Wed 18 Nov, active on a NO-GO day while R5 was paused, and the watch script reported OK. It never fired and was switched off on 18 Nov. Not recorded in docs/incidents/ yet. (2) the 23 Oct to 13 Nov TradingView outage still has no incident record. (3) the 19 and 20 Nov missed closes are a new kind of failure (tool quota), not recorded.
+
+**Open items (user):** recreate the MES v2 alert (or tell me MNQ is the new strategy and I will propose updating the checks, rules and log); decide on the TradingView plan (the routines use about 8 to 10 calls a day and the tool allows far fewer), or cut routine calls or pause them; a fresh Lucid balance for account.csv and say "resume" for R5; Lucid P&L for 21 Sep, 30 Sep and 2 Oct; Phase 1 D actions (Ghost SL/TP toggles and flat-account exit, Tradovate fills and commission); Databento quotes and spend ceiling ($97.49 balance); the Mac realism-audit run; phase3_report.md not committed; Noise-Area paper alert 5760603790 expires 2 Dec.
+
+**Proposed change:** none to the strategy. Operational: reduce TradingView calls per routine (8:45: list-alerts and one bar fetch; 9:50: list-alerts only; 4:15: alert log and two window summaries) so a close always fits the quota, and teach the checks to recognise any active alert named "QuantC ORB".
