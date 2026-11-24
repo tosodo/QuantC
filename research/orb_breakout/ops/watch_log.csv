@@ -27,3 +27,4 @@ date,checked_at,verdict_845,status,flags,active_ids,live_buys
 2026-11-19,2026-11-19T14:51:00Z,NO-GO,OK,,,0
 2026-11-20,2026-11-20T14:51:00Z,NO-GO,OK,,,0
 2026-11-23,2026-11-23T14:51:00Z,NO-GO,OK,,,0
+2026-11-24,2026-11-24T14:51:00Z,NO-GO,SKIPPED_QUOTA,watch_not_run_to_keep_quota_for_close,,
